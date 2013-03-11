@@ -56,15 +56,20 @@ class ReadAligner(object):
         pool = multiprocessing.Pool(numProcesses)
 
         rawAlignments = []
-        print('\r\tProcessed 0%% of %d reads' % num_reads, end='')
+        _print_unbuffered('\r\tProcessed 0%% of %d reads' % num_reads, end='')
         for i, aln in enumerate(pool.imap_unordered(aln_partial, fastaSeqs, CHUNK_SIZE), 1):
             rawAlignments.append(aln)
             if i % (CHUNK_SIZE * numProcesses) == 0:
-               print('\r\tProcessed %3.2f%% of %d reads' % ((i / num_reads) * 100, num_reads), end='')
-               sys.stdout.flush()
+                _print_unbuffered('\r\tProcessed %3.2f%% of %d reads' % ((i / num_reads) * 100, num_reads), end='')
+
         print('')
 
         return dict(rawAlignments)
+
+
+def _print_unbuffered(message, end='\n'):
+    print(message, end=end)
+    sys.stdout.flush()
 
 
 def _not_implemented(readSeq, targetSeq):
