@@ -4,6 +4,7 @@ from __future__ import print_function, unicode_literals, \
 
 import multiprocessing
 import functools
+import sys
 
 from pyim.alignment.base import Alignment
 from pyim.alignment.algorithms.waterman import water
@@ -60,6 +61,7 @@ class ReadAligner(object):
             rawAlignments.append(aln)
             if i % (CHUNK_SIZE * numProcesses) == 0:
                print('\r\tProcessed %3.2f%% of %d reads' % ((i / num_reads) * 100, num_reads), end='')
+               sys.stdout.flush()
         print('')
 
         return dict(rawAlignments)
