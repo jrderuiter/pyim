@@ -2,11 +2,14 @@
 from __future__ import print_function, unicode_literals, \
     absolute_import, division
 
-import multiprocessing, functools
+import multiprocessing
+import functools
 
 from pyim.alignment.base import Alignment
 from pyim.alignment.algorithms.waterman import water
 from pyim.alignment.algorithms.lcs import longest_common_subsequence
+
+CHUNK_SIZE = 500
 
 
 class ReadAligner(object):
@@ -52,10 +55,11 @@ class ReadAligner(object):
         pool = multiprocessing.Pool(numProcesses)
 
         rawAlignments = []
-        for i, aln in enumerate(pool.imap_unordered(aln_partial, fastaSeqs), 1):
+        print('\r\tProcessed 0%% of %d reads' % num_reads, end='')
+        for i, aln in enumerate(pool.imap_unordered(aln_partial, fastaSeqs, CHUNK_SIZE), 1):
             rawAlignments.append(aln)
-            if i % 500 == 0:
-                print('\r\tProcessed %3.2f%% of %d reads' % ((i / num_reads) * 100, num_reads), end='')
+            if i % (CHUNK_SIZE * numProcesses) == 0:
+               print('\r\tProcessed %3.2f%% of %d reads' % ((i / num_reads) * 100, num_reads), end='')
         print('')
 
         return dict(rawAlignments)
