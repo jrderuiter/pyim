@@ -54,7 +54,8 @@ class ReadAligner(object):
         rawAlignments = []
         for i, aln in enumerate(pool.imap_unordered(aln_partial, fastaSeqs), 1):
             rawAlignments.append(aln)
-            print('\r\tProcessed %3.2f%% of %d reads' % ((i / num_reads) * 100, num_reads), end='')
+            if i % 500 == 0:
+                print('\r\tProcessed %3.2f%% of %d reads' % ((i / num_reads) * 100, num_reads), end='')
         print('')
 
         return dict(rawAlignments)
