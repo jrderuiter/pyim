@@ -1,6 +1,6 @@
 
 import numpy as np
-from pyim.alignment.base import Alignment
+from pyim.alignment.model import Alignment
 
 TRACE_END = 0
 TRACE_DIAGONAL = 1
@@ -13,7 +13,8 @@ TRACE_LOOKUP = [TRACE_END,       # Max score = 0:   means end of path
                 TRACE_UP]        # Max score left:  means trace up
 
 
-def water(seqA, seqB, nameA='', nameB='', matchScore=5, mismatchScore=-12, gapScore=-4, verbose=False):
+def water(query, target, matchScore=5, mismatchScore=-12, gapScore=-4, verbose=False):
+    seqA, seqB = query.seq, target.seq
     m, n = len(seqA), len(seqB)
 
     # Generate DP table and traceback path pointer matrix
@@ -30,13 +31,15 @@ def water(seqA, seqB, nameA='', nameB='', matchScore=5, mismatchScore=-12, gapSc
             stepScores = np.array([0, scoreMatch, scoreUp, scoreLeft])
             maxInd = stepScores.argmax()
             score[i][j] = stepScores[maxInd]
-            pointer[i][j] = TRACE_LOOKUP[maxInd]
+            pointer[i][j] = TRACE_LOOKUP[int(maxInd)]
 
     # Determine alignment + some basic statistics
     alignA, alignB, startA, startB, endA, endB = traceback(seqA, seqB, score, pointer)
     identity, score, matchStr = alignment_stats(alignA, alignB, matchScore, mismatchScore, gapScore, verbose=verbose)
 
-    return Alignment(nameA, startA, endA, seqA, nameB, startB, endB, seqB, identity, score, matchStr)
+    return Alignment(query.seqId, startA, endA, query.seq,
+                     target.seqId, startB, endB, target.seq,
+                     score, identity, matchStr, 'inexact')
 
 
 def match_score(alpha, beta, matchScore, mismatchScore, gapScore):

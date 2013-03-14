@@ -38,3 +38,9 @@ class FastaSequence(object):
     def __len__(self):
         return len(self.seq)
 
+    def __str__(self):
+        return '<Fasta Sequence %s: %s>' % (self.seqId, self.seq)
+
+    def __repr__(self):
+        return self.__str__()
+

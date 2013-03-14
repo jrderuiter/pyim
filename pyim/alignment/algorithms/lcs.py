@@ -1,5 +1,10 @@
 
-def longest_common_subsequence(seqA, seqB, matchFunc=None):
+from pyim.alignment.model import Alignment
+
+
+def longest_common_subsequence(query, target, matchFunc=None):
+    seqA, seqB = query.seq, target.seq
+
     ja, jb, n = -1, -1, 0
 
     if seqA == [] or seqB == []:
@@ -37,7 +42,12 @@ def longest_common_subsequence(seqA, seqB, matchFunc=None):
         else:
             ib += 1
 
-    return ja, jb, n
+    cigar_str = '%sM' % n
+
+    return Alignment(query.seqId, ja, ja + n, query.seq,
+                     target.seqId, jb, jb + n, target.seq,
+                     100, 1.0, cigar_str, 'inexact')
+
 
 def _match(a, b):
     return a == b
