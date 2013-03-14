@@ -7,7 +7,7 @@ import sys
 
 from pyim.alignment.aligners.base import ReadAligner
 
-PARALLEL_CHUNK_SIZE = 500
+PARALLEL_CHUNK_SIZE = 200
 
 
 class ParallelReadAligner(ReadAligner):
@@ -30,7 +30,7 @@ class ParallelReadAligner(ReadAligner):
         return [self.align_func(fseq, target_seq) for fseq in fasta_seqs]
 
     def _parallel_in_reads(self, fasta_seqs, target_seq):
-        aln_partial = functools.partial(self.align_func, targetSeq=target_seq)
+        aln_partial = functools.partial(self.align_func, target=target_seq)
 
         pool = multiprocessing.Pool(self.num_processes)
         alignments = pool.map(aln_partial, fasta_seqs)
@@ -41,7 +41,7 @@ class ParallelReadAligner(ReadAligner):
 
     def _parallel_in_reads_progress(self, fasta_seqs, target_seq):
         num_reads = float(len(fasta_seqs))
-        aln_partial = functools.partial(self.align_func, targetSeq=target_seq)
+        aln_partial = functools.partial(self.align_func, target=target_seq)
 
         pool = multiprocessing.Pool(self.num_processes)
 
