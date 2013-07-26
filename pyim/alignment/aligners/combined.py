@@ -16,11 +16,11 @@ class CombinedReadAligner(ReadAligner):
     def align_target(self, fasta_seqs, target_seq):
         return self.align_targets(fasta_seqs, [target_seq])
 
-    def align_targets(self, fasta_seqs, target_seqs, min_inexact_score=50):
+    def align_targets(self, fasta_seqs, target_seqs, parallel_in_targets=False, min_inexact_score=50):
         exact_frame = self._exact_alignments(fasta_seqs, target_seqs)
 
         unmatched_seqs = [s for s in fasta_seqs if s.seqId not in exact_frame.index]
-        inexact_frame = self._inexact_alignment(unmatched_seqs, target_seqs, select_best=True)
+        inexact_frame = self._inexact_alignment(unmatched_seqs, target_seqs, parallel_in_targets, select_best=True)
 
         return pd.concat([exact_frame, inexact_frame])
 
@@ -28,14 +28,10 @@ class CombinedReadAligner(ReadAligner):
         alignments = [self.exact_aligner.align_target(fasta_seqs, tseq) for tseq in target_seqs]
         return self._merge_frames(alignments)
 
-    def _inexact_alignment(self, fasta_seqs, target_seqs, select_best):
+    def _inexact_alignment(self, fasta_seqs, target_seqs, parallel_in_targets, select_best):
         logging.info('Performing inexact alignment for remaining %d reads', len(fasta_seqs))
-
-        alignments = []
-        for tseq in target_seqs:
-            logging.info('- Aligning to %s', tseq.seqId)
-            alignments.append(self.inexact_aligner.align_target(fasta_seqs, tseq))
-        alignment_frame = self._merge_frames(alignments)
+        alignment_frame = self.inexact_aligner.align_targets(fasta_seqs, target_seqs,
+                                                             parallel_in_targets=parallel_in_targets)
 
         if select_best:
             alignment_frame = self._select_best_inexact(alignment_frame)
