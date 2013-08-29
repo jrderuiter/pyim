@@ -1,6 +1,6 @@
 
 import unittest
-from pyim.alignment.algorithms.waterman import water
+from pyim.alignment.aligners.algorithms.waterman import water
 
 
 class TestWaterman(unittest.TestCase):
