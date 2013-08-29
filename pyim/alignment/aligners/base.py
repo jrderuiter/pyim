@@ -1,6 +1,10 @@
 
-import pandas as pd
-from pyim.alignment.model import Alignment
+
+import pandas
+
+from pyim.alignment.aligners.model import Alignment, alignments_to_frame
+from pyim.alignment.aligners.algorithms.waterman import water
+from pyim.alignment.aligners.algorithms.lcs import longest_common_subsequence
 
 
 class ReadAligner(object):
@@ -9,17 +13,73 @@ class ReadAligner(object):
         raise NotImplementedError
 
     def align_targets(self, fasta_seqs, target_seqs):
-        target_alignments = [self.align_target(fasta_seqs, tgt) for tgt in target_seqs]
-        return pd.concat(target_alignments)
+        alignments, unmapped_reads = {}, {}
 
-    def _to_frame(self, alignments):
-        if len(alignments) == 0:
-            return None
+        for target_seq in target_seqs:
+            tgt_alignments, tgt_unmapped = self.align_target(fasta_seqs, target_seq)
+            alignments[target_seq.name] = tgt_alignments
+            unmapped_reads[target_seq.name] = tgt_unmapped
 
-        if isinstance(alignments[0], Alignment):
-            alignments = [aln.__dict__ for aln in alignments]
+        return alignments, unmapped_reads
 
-        frame = pd.DataFrame(alignments)
-        frame.set_index('query_name', inplace=True)
 
-        return frame
+class ExactReadAligner(ReadAligner):
+
+    def align_target(self, fasta_seqs, target):
+        tgt_seq, tgt_len = target.seq, len(target)
+
+        alignments, unmapped_seqs = {}, []
+        for read in fasta_seqs:
+            if tgt_seq in read.seq:
+                start = read.seq.index(tgt_seq)
+                cigar_str = '%dM' % tgt_len
+
+                alignment = Alignment(read.name, start, start + tgt_len, read.seq,
+                                      target.name, 0, tgt_len, tgt_seq,
+                                      100, 1.0, cigar_str, 'exact')
+
+                alignments[read.name] = alignment
+            else:
+                unmapped_seqs.append(read)
+
+        alignment_frame = alignments_to_frame(alignments)
+        return alignment_frame, unmapped_seqs
+
+
+class InexactReadAligner(ReadAligner):
+
+    def __init__(self, min_score=0, align_func=None):
+        super(InexactReadAligner, self).__init__()
+        self.min_score = min_score
+
+    def _align(self, fasta_seq, target_seq):
+        raise NotImplementedError
+
+    def align_target(self, fasta_seqs, target_seq):
+        alignments, unmapped_reads = {}, []
+
+        for fasta_seq in fasta_seqs:
+            alignment = self._align(fasta_seq, target_seq)
+
+            if alignment.score >= self.min_score:
+                alignments[fasta_seq.name] = alignment
+            else:
+                unmapped_reads.append(fasta_seq)
+
+        alignment_frame = alignments_to_frame(alignments)
+        return alignment_frame, unmapped_reads
+
+
+class WatermanAligner(InexactReadAligner):
+
+    def _align(self, fasta_seq, target_seq):
+        return water(fasta_seq, target_seq)
+
+
+class LCSAligner(InexactReadAligner):
+
+    def _align(self, fasta_seq, target_seq):
+        return longest_common_subsequence(fasta_seq, target_seq)
+
+
+
