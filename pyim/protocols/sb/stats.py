@@ -1,6 +1,4 @@
 __author__ = 'j.d.ruiter'
-<<<<<<< HEAD
-
 
 import pandas
 from pyim.plot.hist import ggplot_hist
@@ -24,5 +22,4 @@ def hist_alignment_quality(full_alignment, extra_info):
     plot = ggplot_hist(counts, xlabel='Alignment status')
 
     return plot, counts
-=======
->>>>>>> 0423cd6035e4f32a08eee4c112897caef8c3a66f
+

@@ -140,6 +140,7 @@ def _parse_args():
     parser.add_argument('--read_alignment', required=True)
     parser.add_argument('--num_cores', type=int, default=1)
     parser.add_argument('--read_limit', type=int, default=None)
+
     return parser.parse_args()
 
 

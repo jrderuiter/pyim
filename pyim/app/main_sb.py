@@ -4,7 +4,8 @@ import HTSeq
 import argparse
 from os import path
 
-from pyim.protocols.sb.alignment import sb_alignments
+from pyim.mapping.blat import insertion_statistics, blat_sequences, map_to_insertions
+from pyim.protocols.sb.alignment import sb_alignments, genomic_sequences
 from pyim.protocols.sb.stats import hist_alignment_quality
 
 from pyim.plot.ggplot import ggplot_save
@@ -20,22 +21,30 @@ def _parse_args():
     parser.add_argument('--fasta_file', required=True)
     parser.add_argument('--vector_file', default=path.join(DATA_DIR, 'vec.fa'))
     parser.add_argument('--barcode_file', default=path.join(DATA_DIR, 'SBbarcodes.fa'))
+    parser.add_argument('--reference', required=True)
     parser.add_argument('--workdir', default='.')
     return parser.parse_args()
 
 
-def main(fasta_file, vector_file, barcode_file, workdir):
+def main(fasta_file, vector_file, barcode_file, reference, workdir):
     # Load reads
     fasta_seqs = list(HTSeq.FastaReader(fasta_file))
 
     # Do alignments
     full_alignment, extra_info = sb_alignments(fasta_seqs, vector_file, barcode_file)
 
-    plot, _ = hist_alignment_quality(full_alignment, extra_info)
-    ggplot_save(plot, filepath=path.join(workdir, 'alignment_status.pdf'))
+    #plot, _ = hist_alignment_quality(full_alignment, extra_info)
+    #ggplot_save(plot, filepath=path.join(workdir, 'alignment_status.pdf'))
 
     # Check barcode alignments
-    plot, _ = _alignment_type_stats(full_alignment, extra_info, fasta_seqs, workdir)
+    #plot, _ = _alignment_type_stats(full_alignment, extra_info, fasta_seqs, workdir)
+
+    # Extract genomic sequences and do BLAT
+    _, (bc_alignments, _) = extra_info
+    genomic_seqs = genomic_sequences(full_alignment, bc_alignments)
+    aligned_psl = blat_sequences(genomic_seqs, reference)
+
+    insertions = map_to_insertions(aligned_psl, bc_alignments)
 
 
 

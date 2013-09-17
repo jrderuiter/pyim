@@ -48,7 +48,7 @@ class ExactReadAligner(ReadAligner):
 
 class InexactReadAligner(ReadAligner):
 
-    def __init__(self, min_score=0, align_func=None):
+    def __init__(self, min_score=0):
         super(InexactReadAligner, self).__init__()
         self.min_score = min_score
 
@@ -72,8 +72,18 @@ class InexactReadAligner(ReadAligner):
 
 class WatermanAligner(InexactReadAligner):
 
+    def __init__(self, min_score=0, match_score=5, mismatch_score=-9, gap_score=-5, verbose=False):
+        super(WatermanAligner, self).__init__(min_score)
+        self.verbose = verbose
+
+        self.match_score = match_score
+        self.mismatch_score = mismatch_score
+        self.gap_score = gap_score
+
     def _align(self, fasta_seq, target_seq):
-        return water(fasta_seq, target_seq)
+        return water(fasta_seq, target_seq, matchScore=self.match_score,
+                     mismatchScore=self.mismatch_score, gapScore=self.gap_score,
+                     verbose=self.verbose)
 
 
 class LCSAligner(InexactReadAligner):

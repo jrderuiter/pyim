@@ -64,8 +64,3 @@ def genomic_sequences(vector_barcode_frame, minlength=0):
             genomic_seqs.append(HTSeq.Sequence(genomic_seq, query_names.iloc[i]))
 
     return genomic_seqs
-
-
-def genomic_sequence_row(vec_bc_row):
-    genomic_seq = vec_bc_row['query_seq'][vec_bc_row['query_end_SB']:vec_bc_row['query_start_T7']]
-    return HTSeq.Sequence(genomic_seq, vec_bc_row['query_name'])

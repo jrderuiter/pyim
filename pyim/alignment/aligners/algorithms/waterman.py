@@ -37,8 +37,8 @@ def water(query, target, matchScore=5, mismatchScore=-12, gapScore=-4, verbose=F
     alignA, alignB, startA, startB, endA, endB = traceback(seqA, seqB, score, pointer)
     identity, score, matchStr = alignment_stats(alignA, alignB, matchScore, mismatchScore, gapScore, verbose=verbose)
 
-    return Alignment(query.seqId, startA, endA, query.seq,
-                     target.seqId, startB, endB, target.seq,
+    return Alignment(query.name, startA, endA, query.seq,
+                     target.name, startB, endB, target.seq,
                      score, identity, matchStr, 'inexact')
 
 
@@ -89,18 +89,18 @@ def alignment_stats(alignmentA, alignmentB, matchScore, mismatchScore, gapScore,
     for i in range(0, len(alignmentA)):
         # Match
         if alignmentA[i] == alignmentB[i]:
-            matchStr += '|'
+            matchStr += 'M'
             identity += 1
             score += matchScore
 
         # Not identical, no gaps
         elif alignmentA[i] != alignmentB[i] and alignmentA[i] != '-' and alignmentB[i] != '-':
             score += mismatchScore
-            matchStr += ' '
+            matchStr += 'S'
 
         # Not identical, one is a gap
         elif alignmentA[i] == '-' or alignmentB[i] == '-':
-            matchStr += ' '
+            matchStr += 'I' if alignmentA[i] == '-'  else 'D'
             score += gapScore
 
 
