@@ -1,73 +1,124 @@
+#! /usr/bin/env python
 
-
-import HTSeq
-import argparse
+import os, argparse, logging, pandas
 from os import path
 
-from pyim.mapping.blat import insertion_statistics, blat_sequences, map_to_insertions
-from pyim.protocols.sb.alignment import sb_alignments, genomic_sequences
-from pyim.protocols.sb.stats import hist_alignment_quality
+from pyim.io import read_fasta
+from pyim.ggplot import ggplot_save
+from pyim.alignment.aligners import ExactReadAligner, TruncatedTargetAligner, ExonerateReadAligner, \
+                                    ChainedReadAligner, ParallelTargetAligner, ParallelReadAligner
+from pyim.alignment.filters import QueryEndFilter, MismatchFilter, BestScoreFilter
+from pyim.vector.sb import SBVectorAligner, SBAlignmentStats
+from pyim.genomic.bowtie2 import Bowtie2Aligner
+from pyim.insertions import map_insertions, cluster_insertions
 
-from pyim.plot.ggplot import ggplot_save
-from pyim.plot.hist import hist_alignment_type, hist_barcode_alignment
+logging.basicConfig(format='%(asctime)s %(name)s \t %(message)s', level=logging.INFO)
 
 
-PROJECT_DIR = path.join(path.dirname(path.abspath(__file__)), '../../')
-DATA_DIR = path.join(PROJECT_DIR, 'data')
+def main(reads_file, reference, vector_file, barcode_file, barcode_mapping,
+         contaminant_file, min_seq_length, output_dir, ncpus):
+    # Create output dir if needed
+    if not path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Load reads
+    logging.info('Reading fasta input')
+    reads = list(read_fasta(reads_file))
+
+    # Remove contaminated reads
+    if contaminant_file is not None:
+        logging.info('Removing contaminated reads')
+        num_reads = len(reads)
+        for contaminant in read_fasta(contaminant_file):
+           reads = [r for r in reads if contaminant.seq not in r.seq]
+        num_dropped =  num_reads - len(reads)
+        logging.info('  Dropped %d (%3.2f%%) contaminated reads' % (num_dropped, (num_dropped / float(num_reads))*100))
+
+    # Do vector alignment (align SB, T7 and barcodes)
+    logging.info('Aligning vectors to reads')
+    vec_aln = _align_vectors(reads, vector_file, barcode_file, ncpus)
+    _vec_stats(reads, vec_aln, output_dir)
+
+    logging.info('Filtering short genomic sequences')
+    long_seqs = [s for s in vec_aln.genomic_sequences if len(s.seq) >= min_seq_length]
+
+    # Do genomic alignment
+    logging.info('Aligning genomic sequences')
+    gen_aligner = Bowtie2Aligner(num_cores=ncpus)
+    hits, uniq, dupl, unaligned = gen_aligner.align(long_seqs, reference)
+
+    from pyim.io import write_fasta
+    write_fasta('unaligned.fa', unaligned)
+
+    # Determine and write insertions
+    logging.info('Mapping and clustering putative insertions')
+    insertions_raw = map_insertions(hits, vec_aln.barcode_alignments)
+    insertions = cluster_insertions(insertions_raw, dist_t=10)
+
+    # Add sample names
+    if barcode_mapping is not None:
+        logging.info('Looking up sample names from barcode mapping')
+        bc_map = pandas.read_csv(barcode_mapping)
+        bc_dict = dict(zip(bc_map['Barcode'], bc_map['Sample']))
+
+        insertions_raw['sample'] = insertions_raw['barcode'].map(bc_dict)
+        insertions['sample'] = insertions['barcode'].map(bc_dict)
+
+    # Write output
+    logging.info('Writing output')
+    insertions.to_csv('insertions.csv', sep='\t')
+
+
+def _align_vectors(reads, vector_file, barcode_file, ncpus):
+    trunc1_aligner = TruncatedTargetAligner(ExactReadAligner(), 1)
+    trunc3_aligner = TruncatedTargetAligner(ExactReadAligner(), 3)
+    ex_aligner = ExonerateReadAligner(min_score=60, filters=[QueryEndFilter(verbose=True)])
+
+    exhaust_t7_filters = [QueryEndFilter(verbose=True),
+                          MismatchFilter(2, include_start=True, verbose=True),
+                          BestScoreFilter(verbose=True)]
+    exhaust_aligner = ExonerateReadAligner(min_score=40, exhaustive=True, bestn=10)
+    exhaust_aligner = ParallelReadAligner(exhaust_aligner, ncpus, filters=exhaust_t7_filters)
+
+    t7_aligner = ChainedReadAligner([ExactReadAligner(), trunc1_aligner, trunc3_aligner, ex_aligner, exhaust_aligner])
+    bc_aligner = ParallelTargetAligner(ExactReadAligner(), ncpus)
+    sb_aligner = ChainedReadAligner([ExactReadAligner(), ExonerateReadAligner(min_score=60)])
+
+    vec_aligner = SBVectorAligner()
+    aln_result = vec_aligner.align(reads, vector_file, barcode_file,
+                                   t7_aligner=t7_aligner, bc_aligner=bc_aligner, sb_aligner=sb_aligner)
+
+    return aln_result
+
+def _vec_stats(reads, aln_result, output_dir):
+    stats = SBAlignmentStats(reads, aln_result)
+    ggplot_save(stats.plot_mapped(),                  path.join(output_dir, 'vectors_mapped.pdf'))
+    ggplot_save(stats.plot_unmapped_type(kind='bar'), path.join(output_dir, 'vectors_unmapped_type.pdf'))
+    ggplot_save(stats.plot_alignment_types(),         path.join(output_dir, 'vectors_alignment_type.pdf'))
 
 
 def _parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--fasta_file', required=True)
-    parser.add_argument('--vector_file', default=path.join(DATA_DIR, 'vec.fa'))
-    parser.add_argument('--barcode_file', default=path.join(DATA_DIR, 'SBbarcodes.fa'))
+
+    parser.add_argument('--reads', required=True)
     parser.add_argument('--reference', required=True)
-    parser.add_argument('--workdir', default='.')
+
+    parser.add_argument('--output_dir', default='.')
+
+    parser.add_argument('--vector_file', required=True)
+    parser.add_argument('--barcode_file', required=True)
+    parser.add_argument('--barcode_mapping', default=None)
+    parser.add_argument('--contaminant_file', default=None)
+
+    parser.add_argument('--min_seq_len', default=15, type=int)
+    parser.add_argument('--ncpus', default=1, type=int)
+
     return parser.parse_args()
-
-
-def main(fasta_file, vector_file, barcode_file, reference, workdir):
-    # Load reads
-    fasta_seqs = list(HTSeq.FastaReader(fasta_file))
-
-    # Do alignments
-    full_alignment, extra_info = sb_alignments(fasta_seqs, vector_file, barcode_file)
-
-    #plot, _ = hist_alignment_quality(full_alignment, extra_info)
-    #ggplot_save(plot, filepath=path.join(workdir, 'alignment_status.pdf'))
-
-    # Check barcode alignments
-    #plot, _ = _alignment_type_stats(full_alignment, extra_info, fasta_seqs, workdir)
-
-    # Extract genomic sequences and do BLAT
-    _, (bc_alignments, _) = extra_info
-    genomic_seqs = genomic_sequences(full_alignment, bc_alignments)
-    aligned_psl = blat_sequences(genomic_seqs, reference)
-
-    insertions = map_to_insertions(aligned_psl, bc_alignments)
-
-
-
-def _alignment_type_stats(full_alignment, extra_info, fasta_seqs, workdir):
-    (vec_alignments, vec_unmapped), (bc_alignments, bc_unmapped) = extra_info
-
-    # Check vector alignments
-    hist_path = path.join(workdir, 'hist_aln_{vec}.pdf')
-
-    plot, _ = hist_alignment_type(vec_alignments['T7'], unmapped=vec_unmapped['T7'], title='T7 alignment types')
-    ggplot_save(plot, filepath=hist_path.format(vec='T7'))
-
-    plot, _ = hist_alignment_type(vec_alignments['SB'], unmapped=vec_unmapped['SB'], title='SB alignment types')
-    ggplot_save(plot, filepath=hist_path.format(vec='SB'))
-
-    # Check barcode alignments
-    plot, _ = hist_barcode_alignment(bc_alignments, bc_unmapped=bc_unmapped, title='Barcode alignments')
-    ggplot_save(plot, filepath=path.join(workdir, 'hist_bc.pdf'))
-
-
 
 
 
 if __name__ == '__main__':
     args = _parse_args()
-    main(args.fasta_file, args.vector_file, args.barcode_file, args.workdir)
+    main(args.reads, args.reference, args.vector_file, args.barcode_file,
+         args.barcode_mapping, args.contaminant_file, args.min_seq_len, args.output_dir, args.ncpus)
+

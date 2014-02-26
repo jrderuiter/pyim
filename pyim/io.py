@@ -1,38 +1,27 @@
-__author__ = 'j.d.ruiter'
 
-import pandas as pd, numpy as np
+from __future__ import print_function
 
-
-PSL_COLUMN_NAMES = ['match', 'mismatch', 'repmatch', 'num_n',
-                    'q_gap_count', 'q_gap_bases',
-                    't_gap_count', 't_gap_bases',
-                    'strand',
-                    'q_name', 'q_size', 'q_start', 'q_end',
-                    't_name', 't_size', 't_start', 't_end',
-                    'block_count', 'block_sizes',
-                    'q_starts', 't_starts']
-
-def read_psl(filePath, onlyPutative=False):
-    hits = pd.read_table(filePath, header=None, skiprows=5, names=PSL_COLUMN_NAMES, index_col='q_name')
-    if onlyPutative: hits = _psl_select_putative_reads(hits)
-    return hits
+from itertools import groupby
+from collections import namedtuple
+from pyim.util import chunks
 
 
-def _psl_select_putative_reads(hits):
-    def selmax(group):
-        maxInd = np.argmax(group['match'])
-        return group.ix[maxInd]
+Sequence = namedtuple('Sequence', ['name', 'seq'])
 
-    grp = hits.groupby(level=0)
+def read_fasta(file_path):
+    with open(file_path, 'r') as file_:
+        fa_iter = (x[1] for x in groupby(file_, lambda line: line[0] == ">"))
+        for header in fa_iter:
+            header = header.next()[1:].strip().split(' ')[0]             # drop the ">" and select first element
+            seq = "".join(s.strip() for s in fa_iter.next())     # join all sequence lines to one.
+            yield Sequence(header, seq)
 
-    return grp.apply(selmax)
 
+def write_fasta(file_path, seqs, width=80):
+    with open(file_path, 'w') as file_:
+        for seq in seqs:
+            print('>%s' % seq.name, file=file_)
+            for chunk in chunks(seq.seq, width):
+                print(chunk, file=file_)
+    return file_path
 
-def write_fasta(seqs, path):
-
-    fasta_out = open(path, 'w')
-    for seq in seqs:
-        seq.write_to_fasta_file(fasta_out)
-    fasta_out.close()
-
-    return path

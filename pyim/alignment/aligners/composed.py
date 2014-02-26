@@ -1,39 +1,43 @@
 
-import HTSeq
+import logging
 import pandas
 
+from pyim.io import Sequence
 from pyim.alignment.aligners.base import ReadAligner
 
 
 class ChainedReadAligner(ReadAligner):
 
-    def __init__(self, aligners):
-        super(ChainedReadAligner, self).__init__()
+    def __init__(self, aligners, filters=None):
+        super(ChainedReadAligner, self).__init__(filters)
         self.aligners = aligners
+        self.logger = logging.getLogger('ChainedReadAligner')
 
-    def align_target(self, fasta_seqs, target_seq):
-        unmapped_reads = fasta_seqs
+    def _align_target(self, reads, target):
+        unmapped_reads = reads
 
         alignments = []
         for aligner in self.aligners:
-            aln_alignments, unmapped_reads = aligner.align_target(unmapped_reads, target_seq)
+            self.logger.info('Aligning %d reads with %s' % (len(unmapped_reads), str(aligner)))
+            aln_alignments, unmapped_reads = aligner.align_target(unmapped_reads, target)
             alignments.append(aln_alignments)
+        self.logger.info('Leaving %d reads unaligned' % len(unmapped_reads))
 
         return pandas.concat(alignments, ignore_index=True), unmapped_reads
 
 
 class TruncatedTargetAligner(ReadAligner):
 
-    def __init__(self, aligner, trunc_length):
-        super(TruncatedTargetAligner, self).__init__()
+    def __init__(self, aligner, trunc_length, filters=None):
+        super(TruncatedTargetAligner, self).__init__(filters)
         self.aligner = aligner
         self.trunc_length = trunc_length
 
-    def align_target(self, fasta_seqs, target_seq):
-        target_len = len(target_seq)
+    def _align_target(self, reads, target):
+        target_len = len(target)
 
-        trunc_target = HTSeq.Sequence(target_seq.seq[:self.trunc_length*-1], target_seq.name)
-        alignments, unmapped_reads = self.aligner.align_target(fasta_seqs, trunc_target)
+        trunc_target = Sequence(target.name, target.seq[:self.trunc_length*-1])
+        alignments, unmapped_reads = self.aligner.align_target(reads, trunc_target)
 
         # Fix some fields to indicate truncation has taken place
         # TODO: adjust cigar?
@@ -43,3 +47,6 @@ class TruncatedTargetAligner(ReadAligner):
         alignments['score'] = alignments['identity'].mul(100).round()
 
         return alignments, unmapped_reads
+
+    def __str__(self):
+        return '%s (%s)' % (self.__class__.__name__, self.aligner.__class__.__name__)

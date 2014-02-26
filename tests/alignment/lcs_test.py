@@ -1,7 +1,7 @@
 
 import unittest
 from pyim.io.fasta import FastaSequence
-from pyim.alignment.aligners.algorithms.lcs import longest_common_subsequence
+from pyim.alignment.algorithms.lcs import longest_common_subsequence
 
 
 class TestLCS(unittest.TestCase):

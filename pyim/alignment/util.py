@@ -12,27 +12,30 @@ def print_alignment(aln):
     match_str = ' ' * query_index
 
     for stat in aln['alignment']:
+        is_match = False
 
         if stat == 'M' or stat == 'S':
+            is_match = query[query_index] == target[target_index]
+
             query_str = query_str + query[query_index]
-            query_index = query_index + 1
+            query_index += 1
 
             target_str = target_str + target[target_index]
-            target_index = target_index + 1
+            target_index += 1
         elif stat == 'D':
             query_str = query_str + query[query_index]
-            query_index = query_index + 1
+            query_index += 1
 
-            target_str = target_str + '-'
+            target_str += '-'
         elif stat == 'I':
-            query_str = query_str + '-'
+            query_str += '-'
 
             target_str = target_str + target[target_index]
-            target_index = target_index + 1
+            target_index += 1
         else:
             raise ValueError('Unknown character in alignment string')
 
-        match_str = match_str + ('|' if stat == 'M' else ' ')
+        match_str += '|' if is_match else ' '
 
     query_str = query_str + query[query_index:]
     target_str = target_str + target[target_index:]
