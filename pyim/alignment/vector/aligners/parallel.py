@@ -1,10 +1,12 @@
-import math, pandas
 
-from multiprocessing import Pool
-from functools import partial
+import math
+import functools
+import multiprocessing
+
+import pandas
 
 from pyim.util import chunks
-from pyim.alignment.aligners.base import ReadAligner
+from pyim.alignment.vector.aligners.base import ReadAligner
 
 
 class ParallelAligner(ReadAligner):
@@ -25,19 +27,23 @@ class ParallelReadAligner(ParallelAligner):
         read_chunks = chunks(reads, chunk_size)
 
         # Do alignment and retrieve results
-        pool = Pool(self.pool_size)
-        func = partial(_align_target, target_seq=target, aligner=self.aligner)
+        pool = multiprocessing.Pool(self.pool_size)
+        func = functools.partial(_align_target, target_seq=target, aligner=self.aligner)
         results = pool.map(func, read_chunks, 1)
         pool.close()
         pool.join()
 
         # Concatenate results, filter nones
         alignments, unmapped = zip(*results)
-        alns_not_none = filter(bool, alignments)
-        if  alns_not_none:
-            alns_concat = pandas.concat(alns_not_none, ignore_index=True)
-        else: alns_concat = None
 
+        # First the alignments
+        alns_not_none = [aln for aln in alignments if aln is not None]
+        if alns_not_none:
+            alns_concat = pandas.concat(alns_not_none, ignore_index=True)
+        else:
+            alns_concat = None
+
+        # Then the unmapped reads
         unmapped_concat = [item for sublist in unmapped for item in sublist]
 
         return alns_concat, unmapped_concat
@@ -48,10 +54,11 @@ class ParallelTargetAligner(ParallelAligner):
     def align_targets(self, reads, targets):
         if type(targets) == dict:
             targets = targets.values()
+
         chunk_size = int(math.ceil(len(targets)/float(self.pool_size)))
 
-        pool = Pool(self.pool_size)
-        func = partial(_align_target_tup, reads=reads, aligner=self.aligner)
+        pool = multiprocessing.Pool(self.pool_size)
+        func = functools.partial(_align_target_tup, reads=reads, aligner=self.aligner)
         tup_results = pool.map(func, targets, chunk_size)
         pool.close()
         pool.join()
@@ -64,9 +71,12 @@ class ParallelTargetAligner(ParallelAligner):
 
         return alignment_dict, unmapped_dict
 
+
 def _align_target(reads, target_seq, aligner):
     return aligner.align_target(reads, target_seq)
+
 
 def _align_target_tup(target_seq, reads, aligner):
     result = _align_target(reads, target_seq, aligner)
     return target_seq.name, result
+

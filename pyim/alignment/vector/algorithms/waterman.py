@@ -1,6 +1,7 @@
-
 import numpy as np
-from pyim.alignment.model import Alignment
+
+from pyim.alignment.vector.model import Alignment
+
 
 TRACE_END = 0
 TRACE_DIAGONAL = 1

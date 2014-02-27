@@ -1,3 +1,4 @@
+
 import tempfile
 import uuid
 import shutil
@@ -6,8 +7,8 @@ from os import path
 
 from pyim.io import write_fasta
 from pyim.util import chunks
-from pyim.alignment.aligners.base import InexactReadAligner
-from pyim.alignment.model import Alignment
+from pyim.alignment.vector.aligners.base import InexactReadAligner
+from pyim.alignment.vector.model import Alignment
 
 
 class ExonerateReadAligner(InexactReadAligner):

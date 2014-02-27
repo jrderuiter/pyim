@@ -1,6 +1,8 @@
+import subprocess
 
-import pysam, subprocess
-from pyim.genomic.base import GenomicAligner, GenomicAlignment
+import pysam
+
+from pyim.alignment.genomic.base import GenomicAligner, GenomicAlignment
 
 
 class Bowtie2Aligner(GenomicAligner):

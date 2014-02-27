@@ -1,45 +1,47 @@
 
-import numpy, pandas
+import numpy
+import pandas
 from scipy.spatial.distance import pdist
 from scipy.cluster.hierarchy import single, fcluster
 
 
-def cluster_insertions(insertions, dist_t=10):
-    ins_clust = insertion_clustering(insertions)
-    return putative_insertions(ins_clust)
+def cluster_insertions(insertions, max_dist=10):
+    clustered_insertions = []
 
-
-def insertion_clustering(insertions, dist_t=10):
-    clustered, clust_offset = [], 0
-
-    for _, group in insertions.groupby(['chromosome', 'strand', 'barcode']):
-        if len(group) > 1:
-            locations_2d = numpy.vstack([group['location'], numpy.zeros_like(group['location'])]).T
-            dist = pdist(locations_2d, lambda u,v: numpy.abs(u-v).sum())
-            z = single(dist)
-            clust = fcluster(z, t=dist_t, criterion='distance')
-
-            clust_labels = clust + clust_offset
-            clust_offset += clust.max()
+    for _, ins_grp in insertions.groupby(['barcode', 'chromosome', 'strand']):
+        if len(ins_grp) == 1:
+            clustered_grp = ins_grp
         else:
-            clust_labels = 1 + clust_offset
-            clust_offset += 1
+            dist = _insertion_distances(ins_grp)
+            clust = fcluster(single(dist), t=max_dist, criterion='distance')
+            clustered_grp = _apply_clustering(ins_grp, clust)
+        clustered_insertions.append(clustered_grp)
 
-        group['clust'] = clust_labels
-        clustered.append(group)
-
-    return pandas.concat(clustered)
+    return pandas.concat(clustered_insertions, ignore_index=True)
 
 
-def putative_insertions(ins_clust):
-    insertions = []
+def _insertion_distances(insertions):
+    loc = insertions['location']
 
-    for _, cluster in ins_clust.groupby('clust'):
-        #if np.sum(cluster['unique_lp'] > 3) > 1:
-        #    print cluster
-        putative_ins = cluster.iloc[cluster['unique_lp'].argmax()]
-        putative_ins['lp'] = cluster['lp'].sum()
-        putative_ins['unique_lp'] = cluster['unique_lp'].sum()
-        insertions.append(putative_ins)
+    loc_2d = numpy.vstack([loc, numpy.zeros_like(loc)]).T
+    dist = pdist(loc_2d, lambda u,v: numpy.abs(u-v).sum())
 
-    return pandas.DataFrame(insertions)
+    return dist
+
+
+def _apply_clustering(insertions, clusters):
+    clustered_insertions = []
+    for i in range(1, max(clusters) + 1):
+        cluster_ins = insertions.ix[clusters == i]
+
+        # Create new putative insertion from cluster by selecting
+        # the insertion with the highest ULP as the putative insertion.
+        max_ulp_ind = cluster_ins['unique_lp'].argmax()
+
+        putative_ins = cluster_ins.ix[max_ulp_ind].copy()
+        putative_ins['lp'] = cluster_ins['lp'].sum()
+        putative_ins['unique_lp'] = cluster_ins['unique_lp'].sum()
+
+        clustered_insertions.append(putative_ins)
+
+    return pandas.DataFrame(clustered_insertions)     # Return insertions as frame

@@ -1,9 +1,8 @@
-
 import pandas
 
-from pyim.alignment.model import Alignment
-from pyim.alignment.algorithms.waterman import water
-from pyim.alignment.algorithms.lcs import longest_common_subsequence
+from pyim.alignment.vector.model import Alignment
+from pyim.alignment.vector.algorithms.waterman import water
+from pyim.alignment.vector.algorithms.lcs import longest_common_subsequence
 
 
 class ReadAligner(object):
