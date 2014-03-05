@@ -58,7 +58,7 @@ if __name__ == '__main__':
                              t7_aligner=t7_aligner, bc_aligner=bc_aligner)
 
     output_dir = os.path.dirname(args.output_file)
-    if not os.path.exists(output_dir):
+    if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     insertions.to_csv(args.output_file, sep='\t', index=False)
