@@ -36,7 +36,7 @@ def _parse_args():
     parser.add_argument('-r', '--reference', dest='reference', required=True)
     parser.add_argument('-v', '--vector_file', dest='vector_file', required=True)
     parser.add_argument('-b', '--barcode_file', dest='barcode_file', required=True)
-    parser.add_argument('-m', '--barcode_mapping', dest='barcode_sample_file', default=None)
+    parser.add_argument('-m', '--barcode_mapping', dest='barcode_sample_file', required=True)
     parser.add_argument('-c', '--contaminant_file', dest='contaminant_file', default=None)
 
     parser.add_argument('-l', '--min-seq-len', dest='min_seq_len', default=15, type=int)
