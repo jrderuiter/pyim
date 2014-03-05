@@ -1,9 +1,13 @@
 
-import tempfile, shutil, \
-       uuid, logging, pandas
+import tempfile
+import shutil
+import uuid
+import logging
+import pandas
 
 from os import path
 from collections import namedtuple
+
 from pyim.io import write_fasta
 
 
@@ -72,7 +76,6 @@ class GenomicAligner(object):
         self.logger.info('%d reads (%02.2f%%) aligned exactly 1 time' % (n_uniq, (n_uniq/n_reads)*100))
         self.logger.info('%d reads (%02.2f%%) aligned >1 times' % (n_dupl, (n_dupl/n_reads)*100))
         self.logger.info('%d reads (%02.2f%%) aligned 0 times' % (n_unaligned, (n_unaligned/n_reads)*100))
-
 
     def _setup(self):
         tmp_dir = tempfile.mkdtemp()

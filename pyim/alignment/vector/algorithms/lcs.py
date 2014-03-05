@@ -1,5 +1,5 @@
 
-from pyim.alignment.model import Alignment
+from pyim.alignment.vector.model import Alignment
 
 
 def longest_common_subsequence(query, target, matchFunc=None):

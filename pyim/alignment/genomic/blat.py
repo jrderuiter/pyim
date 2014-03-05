@@ -1,8 +1,9 @@
-
-import subprocess, pandas
-
+import subprocess
 from os import path
-from pyim.genomic.base import GenomicAligner, GenomicAlignment
+
+import pandas
+
+from pyim.alignment.genomic.base import GenomicAligner, GenomicAlignment
 
 PSL_COLUMN_NAMES = ['match', 'mismatch', 'repmatch', 'num_n',
                     'q_gap_count', 'q_gap_bases',

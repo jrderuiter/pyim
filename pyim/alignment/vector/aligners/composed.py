@@ -1,9 +1,9 @@
-
 import logging
+
 import pandas
 
 from pyim.io import Sequence
-from pyim.alignment.aligners.base import ReadAligner
+from pyim.alignment.vector.aligners.base import ReadAligner
 
 
 class ChainedReadAligner(ReadAligner):
