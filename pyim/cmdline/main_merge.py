@@ -11,7 +11,7 @@ def main():
 
     # Load and merge frames, injecting run names as extra column
     ins_frames = []
-    for run_name, set_file in zip(args.set_names, args.insertion_sets):
+    for run_name, set_file in zip(args.run_names, args.insertion_sets):
         ins_frame = pandas.read_csv(set_file, sep='\t')
         ins_frame['run'] = run_name
         ins_frames.append(ins_frame)
@@ -19,7 +19,15 @@ def main():
 
     # Mask samples if requested. Argument 'keep_only_masked'
     # determines if samples in the mask are kept or discarded.
-    ins_in_mask = ins_merged['sample'].isin(args.mask)
+    # First we check if all masked samples are indeed present
+    # in the data set to avoid issues due to spelling errors etc.
+
+    sample_set = set(ins_merged['sample'])
+    for sample in args.masked_samples:
+        if sample not in sample_set:
+            print "WARNING: Requested masked sample %s was not encountered in the dataset." % sample
+
+    ins_in_mask = ins_merged['sample'].isin(args.masked_samples)
     if args.keep_only_masked:
         ins_merged = ins_merged[ins_in_mask]
     else:
@@ -28,7 +36,7 @@ def main():
     # Reset the ids in the merged frame to ensure ids are unique
     ins_merged['id'] = ['INS_%d' % d for d in range(1, len(ins_merged)+1)]
 
-    ins_merged.to_csv(args.output, sep='\t', index=False)
+    ins_merged.to_csv(args.merged_output, sep='\t', index=False)
 
 
 def _parse_args():
@@ -37,8 +45,8 @@ def _parse_args():
     parser.add_argument('-i', '--input', dest='insertion_sets', required=True, nargs='+')
     parser.add_argument('-n', '--names', dest='run_names', required=True, nargs='+')
     parser.add_argument('-o', '--output', dest='merged_output', required=True)
-    parser.add_argument('-m', '--mask', dest='masked_files', default=[], nargs='+')
-    parser.add_argument('--keep-mask', dest='keep_only_masked', default=False, action='store_true')
+    parser.add_argument('-m', '--mask', dest='masked_samples', default=[], nargs='+')
+    parser.add_argument('--only-keep-mask', dest='keep_only_masked', default=False, action='store_true')
 
     return parser.parse_args()
 
