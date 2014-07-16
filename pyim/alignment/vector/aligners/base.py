@@ -37,8 +37,9 @@ class ReadAligner(object):
         return alignments, unmapped_reads
 
     def _alignments_to_frame(self, alns):
-        if len(alns) == 0: return None
-        values = alns.values() if type(alns) == dict else alns
+        if len(alns) == 0:
+            return None
+        values = list(alns.values()) if type(alns) == dict else alns
         return pandas.DataFrame(values, columns=values[0]._fields)
 
     def _apply_filters(self, alignment, unmapped):

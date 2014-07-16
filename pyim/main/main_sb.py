@@ -11,7 +11,7 @@ from pyim.alignment.vector.aligners import ExactReadAligner, TruncatedTargetAlig
 from pyim.alignment.vector.filters import QueryEndFilter, MismatchFilter, BestScoreFilter
 
 
-DATA_DIR = path.dirname(__file__)
+DATA_DIR = path.normpath(path.join(path.dirname(__file__), '../../data'))
 DEFAULT_CONTAMINANTS = path.join(DATA_DIR, 'SB_contaminants.fa')
 DEFAULT_BARCODES     = path.join(DATA_DIR, 'SB_barcodes.fa')
 DEFAULT_VECTORS      = path.join(DATA_DIR, 'vec.fa')
@@ -31,8 +31,7 @@ def main(options):
     logger.addHandler(ch)
 
     # Create output dir
-    output_dir = path.dirname(options.output_file)
-    makedirs_safe(output_dir)
+    makedirs_safe(options.output_dir)
 
     # Setup aligners
     sb_aligner, t7_aligner, bc_aligner = _setup_aligners(options.threads)
@@ -42,19 +41,20 @@ def main(options):
     insertions = sb_pipeline(reads_file=options.reads_file, run_name=options.run_name,
                              reference=options.reference, vector_aligners=vector_aligners,
                              vector_file=options.vector_file, barcode_file=options.barcode_file,
-                             barcode_sample_file=options.barcode_sample_file, work_dir=output_dir,
+                             barcode_sample_file=options.barcode_sample_file, work_dir=options.output_dir,
                              contaminant_file=options.contaminant_file, threads=options.threads,
                              min_sequence_len=options.min_seq_len, min_ulp=options.min_ulp)
 
     # Write output
-    insertions.to_csv(options.output_file, sep='\t', index=False)
+    output_file = path.join(options.output_dir, 'insertions.txt')
+    insertions.to_csv(output_file, sep='\t', index=False)
 
 
 def _parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-i', '--input_reads',      dest='reads_file', required=True)
-    parser.add_argument('-o', '--output_file',      required=True)
+    parser.add_argument('-o', '--output_dir',       required=True)
 
     parser.add_argument('-r', '--reference',        required=True)
     parser.add_argument('-m', '--barcode-mapping',  dest='barcode_sample_file', required=True)

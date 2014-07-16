@@ -31,8 +31,8 @@ def fasta_generator(file_path):
     with open(file_path, 'r') as file_:
         fa_iter = (x[1] for x in groupby(file_, lambda line: line[0] == ">"))
         for header in fa_iter:
-            header = header.next()[1:].strip().split(' ')[0]     # drop the ">" and select first element
-            seq = "".join(s.strip() for s in fa_iter.next())     # join all sequence lines to one.
+            header = next(header)[1:].strip().split(' ')[0]     # drop the ">" and select first element
+            seq = "".join(s.strip() for s in next(fa_iter))     # join all sequence lines to one.
             yield Sequence(header, seq)
 
 

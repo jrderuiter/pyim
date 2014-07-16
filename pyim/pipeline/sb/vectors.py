@@ -79,7 +79,7 @@ def align_vector(reads, seq, aligner):
 
 def align_barcodes(reads, barcode_seqs, aligner=None):
     alignments, _ = aligner.align_targets(reads, barcode_seqs)
-    alignments = pandas.concat(alignments.values(), ignore_index=True)
+    alignments = pandas.concat(list(alignments.values()), ignore_index=True)
 
     is_mapped = pandas.Series([read.name for read in reads]).isin(alignments['query_name'])
     unmapped = [reads[i] for i, mapped in enumerate(is_mapped) if not mapped]
