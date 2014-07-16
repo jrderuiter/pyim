@@ -54,7 +54,9 @@ class ExonerateReadAligner(InexactReadAligner):
 
         exo_cmd_frmt = exo_cmd.format(minscore=self.min_score, model=self.model, bestn=self.bestn,
                                       reads=read_path, target=target_path, output=output_path)
-        subprocess.check_call(exo_cmd_frmt, shell=True)
+
+        with open('/dev/null', 'w') as dev_null:
+            subprocess.check_call(exo_cmd_frmt, shell=True, stderr=dev_null)
 
     def _parse_result(self, output_path, reads, target):
         with open(output_path, 'r') as file_:
