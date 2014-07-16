@@ -1,7 +1,4 @@
-
-import tempfile
-import shutil
-import uuid
+import os
 import logging
 import pandas
 
@@ -19,15 +16,19 @@ GenomicAlignment = namedtuple('GenomicAlignment',
 
 class GenomicAligner(object):
 
-    def __init__(self, filters=None):
-        if filters is None: filters = []
+    def __init__(self, work_dir, filters=None):
+        if filters is None:
+            filters = []
+
         self.filters = filters
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.work_dir = work_dir
+
+        if not path.exists(work_dir):
+            os.makedirs(work_dir)
 
     def align(self, reads, reference):
-        tmp_dir = self._setup()
-
-        output_path = self._run(reads, reference, tmp_dir)
+        output_path = self._run(reads, reference)
         alignments = self._read_output(output_path)
         alignment_df = pandas.DataFrame(alignments, columns=alignments[0]._fields)
 
@@ -35,13 +36,12 @@ class GenomicAligner(object):
         dupl, uniq = self.duplicates(filtered_alignment)
         unaligned = self.unaligned(reads, uniq, dupl)
 
-        self._cleanup(tmp_dir)
         self._stats(reads, uniq, dupl, unaligned)
 
         hits = self.to_hits(uniq)
         return hits, uniq, dupl, unaligned
 
-    def _run(self, reads, reference, tmp_dir):
+    def _run(self, reads, reference):
         raise NotImplementedError
 
     def _read_output(self, output_path):
@@ -77,21 +77,20 @@ class GenomicAligner(object):
         self.logger.info('%d reads (%02.2f%%) aligned >1 times' % (n_dupl, (n_dupl/n_reads)*100))
         self.logger.info('%d reads (%02.2f%%) aligned 0 times' % (n_unaligned, (n_unaligned/n_reads)*100))
 
-    def _setup(self):
-        tmp_dir = tempfile.mkdtemp()
-        return tmp_dir
+    #def _setup(self):
+    #    tmp_dir = tempfile.mkdtemp()
+    #    return tmp_dir
 
-    def _tmpfile(self, tmp_dir, ext):
-        fn = '{fn}.{ext}'.format(fn=uuid.uuid4(), ext=ext)
-        return path.join(tmp_dir, fn)
+    #def _tmpfile(self, tmp_dir, ext):
+    #    fn = '{fn}.{ext}'.format(fn=uuid.uuid4(), ext=ext)
+    #    return path.join(tmp_dir, fn)
 
-    def _cleanup(self, tmp_dir):
-        try: shutil.rmtree(tmp_dir)
-        except OSError as exc:
-            if exc.errno != 2: raise
+    #def _cleanup(self, tmp_dir):
+    #    try: shutil.rmtree(tmp_dir)
+    #    except OSError as exc:
+    #        if exc.errno != 2: raise
 
-    def _write_fasta(self, dir_path, reads):
-        file_path = self._tmpfile(dir_path, ext='fna')
+    def _write_fasta(self, file_path, reads):
         return write_fasta(file_path, reads)
 
     def to_hits(self, alignment_df):

@@ -20,20 +20,20 @@ def read_psl(psl_file):
 
 class BlatAligner(GenomicAligner):
 
-    def __init__(self, filters=None, minscore=10):
-        super(BlatAligner, self).__init__(filters)
-        self.minscore = minscore
+    def __init__(self, work_dir, filters=None, min_score=10):
+        super(BlatAligner, self).__init__(work_dir, filters)
+        self.min_score = min_score
         
-    def _run(self, reads, reference, tmp_dir):
-        read_file = self._write_fasta(tmp_dir, reads)
+    def _run(self, reads, reference):
+        read_file = self._write_fasta(self.work_dir, reads)
 
-        output_path = path.join(tmp_dir, 'mapped_reads.psl')
-        log_path = path.join(tmp_dir, 'blat.log')
+        output_path = path.join(self.work_dir, 'mapped_reads.psl')
+        log_path = path.join(self.work_dir, 'blat.log')
 
-        cmd = "blat {reference} {fasta} -out=psl -minScore={minscore} {psl} 2> {log}"
-        cmd_frmt = cmd.format(reference=reference, fasta=read_file,
-                              minscore=self.minscore, psl=output_path, log=log_path)
-        subprocess.check_call(cmd_frmt, shell=True)
+        cmd = "blat {reference} {fasta} -out=psl -minScore={min_score} {psl} 2> {log}"
+        cmd_fmt = cmd.format(reference=reference, fasta=read_file,
+                             min_score=self.min_score, psl=output_path, log=log_path)
+        subprocess.check_call(cmd_fmt, shell=True)
 
         return output_path
 

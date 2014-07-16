@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 import pysam
@@ -7,25 +8,29 @@ from pyim.alignment.genomic.base import GenomicAligner, GenomicAlignment
 
 class Bowtie2Aligner(GenomicAligner):
 
-    def __init__(self, filters=None, max_hits=2, num_cores=1):
-        super(Bowtie2Aligner, self).__init__(filters)
+    def __init__(self, work_dir, filters=None, max_hits=2, num_cores=1):
+        super(Bowtie2Aligner, self).__init__(work_dir, filters)
         self.num_cores = num_cores
         self.max_hits = max_hits
 
+    def _run(self, reads, reference):
+        reads_path = os.path.join(self.work_dir, 'reads.fna')
+        output_path = os.path.join(self.work_dir, 'alignment.sam')
 
-    def _run(self, reads, reference, tmp_dir):
-        read_file = self._write_fasta(tmp_dir, reads)
-        output_path = self._tmpfile(tmp_dir, ext='sam')
+        self._write_fasta(reads_path, reads)
 
         cmd = "bowtie2 -p {n_cpus} -k {n_hits} -x {reference} -f -U {fasta} -S {output}"
-        cmd_frmt = cmd.format(reference=reference, fasta=read_file, n_hits=self.max_hits,
+        cmd_fmt = cmd.format(reference=reference, fasta=reads_path, n_hits=self.max_hits,
                               output=output_path, n_cpus=self.num_cores)
-        subprocess.check_call(cmd_frmt, shell=True)
+
+        log_path = output_path + '.log'
+        with open(log_path, 'w') as stderr:
+            subprocess.check_call(cmd_fmt, shell=True, stderr=stderr)
 
         return output_path
 
     def _read_output(self, file_path):
-        sam_file = pysam.Samfile(file_path, "r" )
+        sam_file = pysam.Samfile(file_path, "r")
 
         alignments= []
         for read in sam_file.fetch():
