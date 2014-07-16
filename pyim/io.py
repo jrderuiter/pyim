@@ -1,6 +1,7 @@
-
 from __future__ import print_function
 
+import os
+from os import path
 from itertools import groupby
 from collections import namedtuple
 from pyim.util import chunks
@@ -16,11 +17,21 @@ def read_fasta(file_path, as_dict=False):
         return (seq for seq in fasta_generator(file_path))
 
 
+def read_fasta_filtered(reads_file, contaminant_file=None):
+    reads = list(read_fasta(reads_file))
+
+    if contaminant_file is not None:
+        for contaminant in read_fasta(contaminant_file):
+            reads = [r for r in reads if contaminant.seq not in r.seq]
+
+    return reads
+
+
 def fasta_generator(file_path):
     with open(file_path, 'r') as file_:
         fa_iter = (x[1] for x in groupby(file_, lambda line: line[0] == ">"))
         for header in fa_iter:
-            header = header.next()[1:].strip().split(' ')[0]             # drop the ">" and select first element
+            header = header.next()[1:].strip().split(' ')[0]     # drop the ">" and select first element
             seq = "".join(s.strip() for s in fa_iter.next())     # join all sequence lines to one.
             yield Sequence(header, seq)
 
@@ -49,3 +60,16 @@ def write_insertions_to_gff(insertions, file_path):
             print(gff_str_fmt, file=gff_file)
 
     return file_path
+
+
+def makedirs_safe(dir_path):
+    if not path.exists(dir_path):
+        os.makedirs(dir_path)
+    return dir_path
+
+
+def write_frame(frame, file_path, sep='\t', index=False):
+    file_dir = os.path.dirname(file_path)
+    if not os.path.exists(file_dir):
+        os.makedirs(file_dir)
+    frame.to_csv(file_path, sep=sep, index=index)

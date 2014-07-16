@@ -1,9 +1,12 @@
 #! /usr/bin/env python
 
-import os
 import argparse
+from os import path
+import logging
 
-from pyim.sb.pipeline import sb_pipeline
+
+from pyim.io import makedirs_safe
+from pyim.pipeline.sb.pipeline import sb_pipeline
 from pyim.alignment.vector.aligners import ExactReadAligner, TruncatedTargetAligner, ExonerateReadAligner, \
                                            ChainedReadAligner, ParallelTargetAligner, ParallelReadAligner
 from pyim.alignment.vector.filters import QueryEndFilter, MismatchFilter, BestScoreFilter
@@ -47,18 +50,37 @@ def _parse_args():
     return parser.parse_args()
 
 
+def main(options):
+
+    # create logger
+    logger = logging.getLogger('PyIM')
+    logger.setLevel(logging.DEBUG)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    # Create output dir
+    output_dir = path.dirname(options.output_file)
+    makedirs_safe(output_dir)
+
+    # Setup aligners
+    sb_aligner, t7_aligner, bc_aligner = _setup_aligners(options.threads)
+    vector_aligners = {'sb': sb_aligner, 't7': t7_aligner, 'bc': bc_aligner}
+
+    # Run SB pipeline
+    insertions = sb_pipeline(options.reads_file, options.reference, output_dir, vector_aligners,
+                             options.vector_file, options.barcode_file,
+                             options.barcode_sample_file, options.contaminant_file,
+                             options.threads, options.min_seq_len, options.min_ulp)
+
+    # Write output
+    insertions.to_csv(options.output_file, sep='\t', index=False)
+
+
 if __name__ == '__main__':
-    args = _parse_args()
+    main(_parse_args())
 
-    sb_aligner, t7_aligner, bc_aligner = _setup_aligners(args.threads)
-
-    insertions = sb_pipeline(args.reads_file, args.reference, args.vector_file, args.barcode_file,
-                             args.barcode_sample_file, args.contaminant_file, args.threads,
-                             args.min_seq_len, args.min_ulp, sb_aligner=sb_aligner,
-                             t7_aligner=t7_aligner, bc_aligner=bc_aligner)
-
-    output_dir = os.path.dirname(args.output_file)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    insertions.to_csv(args.output_file, sep='\t', index=False)
