@@ -51,11 +51,9 @@ def write_insertions_to_gff(insertions, file_path):
         info_str = 'ID={name}({id});NAME={id};LP={lp};uLP={ulp}'
 
         for i, (_, row) in enumerate(insertions.iterrows()):
-            name = row['ins_id'] if 'ins_id' in row else 'INS_' + str(i)
-
-            info_str_fmt = info_str.format(name=name, id=row['sample'], lp=row['lp'], ulp=row['unique_lp'])
+            info_str_fmt = info_str.format(name=row['id'], id=row['sample'], lp=row['lp'], ulp=row['unique_lp'])
             gff_str_fmt = gff_str.format(chrom=row['chromosome'],  strand=row['strand'], info=info_str_fmt,
-                                     start=row['location'] - 10, end=row['location'] + 10)
+                                         start=row['location'] - 10, end=row['location'] + 10)
 
             print(gff_str_fmt, file=gff_file)
 
