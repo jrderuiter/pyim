@@ -60,9 +60,9 @@ def _parse_args():
     parser.add_argument('-m', '--barcode-mapping',  dest='barcode_sample_file', required=True)
     parser.add_argument('-n', '--run-name',         dest='run_name', required=True)
 
-    parser.add_argument('-v', '--vector-file',      dest='vector_file',         default=DEFAULT_VECTORS)
-    parser.add_argument('-b', '--barcode-file',     dest='barcode_file',        default=DEFAULT_BARCODES)
-    parser.add_argument('-c', '--contaminant-file', dest='contaminant_file',    default=DEFAULT_CONTAMINANTS)
+    parser.add_argument('-v', '--vector-file',      dest='vector_file',      default=DEFAULT_VECTORS)
+    parser.add_argument('-b', '--barcode-file',     dest='barcode_file',     default=DEFAULT_BARCODES)
+    parser.add_argument('-c', '--contaminant-file', dest='contaminant_file', default=DEFAULT_CONTAMINANTS)
 
     parser.add_argument('-l', '--min-seq-len',      dest='min_seq_len', default=15, type=int)
     parser.add_argument('-u', '--min-ulp',          dest='min_ulp',     default=2, type=int)

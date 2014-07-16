@@ -46,6 +46,7 @@ def _alignments_to_insertions_strand(alignments, strand, sb_field, t7_field):
 
     # Create insertion frame from statistics
     insertions = hit_group_stats.reset_index()
+    insertions = insertions[['bc_name', 'contig_name', sb_field, 'len', 'unique_len']]
     insertions.columns = ['barcode', 'chromosome', 'location', 'lp', 'unique_lp']
     insertions['strand'] = strand
 

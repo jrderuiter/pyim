@@ -1,5 +1,7 @@
 import logging
 
+import numpy
+
 from pyim.io import read_fasta_filtered
 from pyim.pipeline.shared.alignment import align_to_reference
 from pyim.pipeline.sb.vectors import extract_genomic_seqs
@@ -25,5 +27,7 @@ def sb_pipeline(reads_file, run_name, reference, vector_aligners,
     logger.info('Identifying insertions from alignments')
     insertions = identify_insertions(alignments, barcode_sample_file, min_ulp)
     insertions['id'] = insertions['id'].map(lambda id_: '%s.%s' % (run_name, id_))
+
+    assert(not numpy.any(insertions['lp'] < insertions['unique_lp']))
 
     return insertions
