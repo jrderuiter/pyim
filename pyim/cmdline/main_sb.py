@@ -4,7 +4,6 @@ import argparse
 from os import path
 import logging
 
-
 from pyim.io import makedirs_safe
 from pyim.pipeline.sb.pipeline import sb_pipeline
 from pyim.alignment.vector.aligners import ExactReadAligner, TruncatedTargetAligner, ExonerateReadAligner, \
@@ -12,47 +11,15 @@ from pyim.alignment.vector.aligners import ExactReadAligner, TruncatedTargetAlig
 from pyim.alignment.vector.filters import QueryEndFilter, MismatchFilter, BestScoreFilter
 
 
-def _setup_aligners(threads):
-    trunc1_aligner = TruncatedTargetAligner(ExactReadAligner(), 1)
-    trunc3_aligner = TruncatedTargetAligner(ExactReadAligner(), 3)
-    ex_aligner = ExonerateReadAligner(min_score=60, filters=[QueryEndFilter(verbose=True)])
-
-    exhaust_t7_filters = [QueryEndFilter(verbose=True),
-                          MismatchFilter(2, include_start=True, verbose=True),
-                          BestScoreFilter(verbose=True)]
-    exhaust_aligner = ExonerateReadAligner(min_score=40, exhaustive=True, bestn=10)
-    exhaust_aligner = ParallelReadAligner(exhaust_aligner, threads, filters=exhaust_t7_filters)
-
-    t7_aligner = ChainedReadAligner([ExactReadAligner(), trunc1_aligner, trunc3_aligner, ex_aligner, exhaust_aligner])
-    bc_aligner = ParallelTargetAligner(ExactReadAligner(), threads)
-    sb_aligner = ChainedReadAligner([ExactReadAligner(), ExonerateReadAligner(min_score=60)])
-
-    return sb_aligner, t7_aligner, bc_aligner
-
-
-def _parse_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('-i', '--input_reads', dest='reads_file', required=True)
-    parser.add_argument('-o', '--output_file', dest='output_file', required=True)
-
-    parser.add_argument('-r', '--reference', dest='reference', required=True)
-    parser.add_argument('-v', '--vector_file', dest='vector_file', required=True)
-    parser.add_argument('-b', '--barcode_file', dest='barcode_file', required=True)
-    parser.add_argument('-m', '--barcode_mapping', dest='barcode_sample_file', required=True)
-    parser.add_argument('-c', '--contaminant_file', dest='contaminant_file', default=None)
-
-    parser.add_argument('-l', '--min-seq-len', dest='min_seq_len', default=15, type=int)
-    parser.add_argument('-u', '--min-ulp', dest='min_ulp', default=2, type=int)
-
-    parser.add_argument('-t', '--threads', dest='threads', default=1, type=int)
-
-    return parser.parse_args()
+DATA_DIR = path.dirname(__file__)
+DEFAULT_CONTAMINANTS = path.join(DATA_DIR, 'SB_contaminants.fa')
+DEFAULT_BARCODES     = path.join(DATA_DIR, 'SB_barcodes.fa')
+DEFAULT_VECTORS      = path.join(DATA_DIR, 'vec.fa')
 
 
 def main(options):
 
-    # create logger
+    # Create logger
     logger = logging.getLogger('PyIM')
     logger.setLevel(logging.DEBUG)
 
@@ -81,6 +48,44 @@ def main(options):
     insertions.to_csv(options.output_file, sep='\t', index=False)
 
 
+def _parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-i', '--input_reads',      dest='reads_file', required=True)
+    parser.add_argument('-o', '--output_file',      required=True)
+
+    parser.add_argument('-r', '--reference',        required=True)
+    parser.add_argument('-m', '--barcode-mapping',  dest='barcode_sample_file', required=True)
+
+    parser.add_argument('-v', '--vector-file',      dest='vector_file',         default=DEFAULT_VECTORS)
+    parser.add_argument('-b', '--barcode-file',     dest='barcode_file',        default=DEFAULT_BARCODES)
+    parser.add_argument('-c', '--contaminant-file', dest='contaminant_file',    default=DEFAULT_CONTAMINANTS)
+
+    parser.add_argument('-l', '--min-seq-len',      dest='min_seq_len', default=15, type=int)
+    parser.add_argument('-u', '--min-ulp',          dest='min_ulp',     default=2, type=int)
+
+    parser.add_argument('-t', '--threads',          default=1, type=int)
+
+    return parser.parse_args()
+
+
+def _setup_aligners(threads):
+    trunc1_aligner = TruncatedTargetAligner(ExactReadAligner(), 1)
+    trunc3_aligner = TruncatedTargetAligner(ExactReadAligner(), 3)
+    ex_aligner = ExonerateReadAligner(min_score=60, filters=[QueryEndFilter(verbose=True)])
+
+    exhaust_t7_filters = [QueryEndFilter(verbose=True),
+                          MismatchFilter(2, include_start=True, verbose=True),
+                          BestScoreFilter(verbose=True)]
+    exhaust_aligner = ExonerateReadAligner(min_score=40, exhaustive=True, bestn=10)
+    exhaust_aligner = ParallelReadAligner(exhaust_aligner, threads, filters=exhaust_t7_filters)
+
+    t7_aligner = ChainedReadAligner([ExactReadAligner(), trunc1_aligner, trunc3_aligner, ex_aligner, exhaust_aligner])
+    bc_aligner = ParallelTargetAligner(ExactReadAligner(), threads)
+    sb_aligner = ChainedReadAligner([ExactReadAligner(), ExonerateReadAligner(min_score=60)])
+
+    return sb_aligner, t7_aligner, bc_aligner
+
+
 if __name__ == '__main__':
     main(_parse_args())
-
