@@ -39,10 +39,12 @@ def main(options):
     vector_aligners = {'sb': sb_aligner, 't7': t7_aligner, 'bc': bc_aligner}
 
     # Run SB pipeline
-    insertions = sb_pipeline(options.reads_file, options.reference, output_dir, vector_aligners,
-                             options.vector_file, options.barcode_file,
-                             options.barcode_sample_file, options.contaminant_file,
-                             options.threads, options.min_seq_len, options.min_ulp)
+    insertions = sb_pipeline(reads_file=options.reads_file, run_name=options.run_name,
+                             reference=options.reference, vector_aligners=vector_aligners,
+                             vector_file=options.vector_file, barcode_file=options.barcode_file,
+                             barcode_sample_file=options.barcode_sample_file, work_dir=output_dir,
+                             contaminant_file=options.contaminant_file, threads=options.threads,
+                             min_sequence_len=options.min_seq_len, min_ulp=options.min_ulp)
 
     # Write output
     insertions.to_csv(options.output_file, sep='\t', index=False)
@@ -56,6 +58,7 @@ def _parse_args():
 
     parser.add_argument('-r', '--reference',        required=True)
     parser.add_argument('-m', '--barcode-mapping',  dest='barcode_sample_file', required=True)
+    parser.add_argument('-n', '--run-name',         dest='run_name', required=True)
 
     parser.add_argument('-v', '--vector-file',      dest='vector_file',         default=DEFAULT_VECTORS)
     parser.add_argument('-b', '--barcode-file',     dest='barcode_file',        default=DEFAULT_BARCODES)

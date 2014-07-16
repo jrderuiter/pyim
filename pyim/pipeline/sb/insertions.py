@@ -21,7 +21,7 @@ def identify_insertions(alignments, barcode_sample_file, min_ulp):
     insertions = insertions.ix[insertions['unique_lp'] >= min_ulp]
 
     logger.info('Mapping insertions to samples')
-    insertions['id'] = ['INS_%d' % ind for ind in  range(1, len(insertions)+1)]
+    insertions['id'] = ['INS_%d' % ind for ind in range(1, len(insertions)+1)]
     insertions = map_insertions_to_samples(insertions, barcode_sample_file, drop_barcode=True)
 
     return insertions[['id', 'chromosome', 'location', 'strand', 'sample', 'lp', 'unique_lp']]

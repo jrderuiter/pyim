@@ -9,9 +9,9 @@ from pyim.pipeline.sb.insertions import identify_insertions
 logger = logging.getLogger('PyIM.SB')
 
 
-def sb_pipeline(reads_file, reference, work_dir, vector_aligners,
-                vector_file, barcode_file, barcode_sample_file, contaminant_file=None,
-                threads=1, min_sequence_len=15, min_ulp=2):
+def sb_pipeline(reads_file, run_name, reference, vector_aligners,
+                vector_file, barcode_file, barcode_sample_file, work_dir,
+                contaminant_file=None, threads=1, min_sequence_len=15, min_ulp=2):
 
     logger.info('Reading input reads')
     reads = read_fasta_filtered(reads_file, contaminant_file)
@@ -24,5 +24,6 @@ def sb_pipeline(reads_file, reference, work_dir, vector_aligners,
 
     logger.info('Identifying insertions from alignments')
     insertions = identify_insertions(alignments, barcode_sample_file, min_ulp)
+    insertions['id'] = insertions['id'].map(lambda id_: '%s.%s' % (run_name, id_))
 
     return insertions
