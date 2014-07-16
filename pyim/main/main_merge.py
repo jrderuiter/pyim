@@ -2,56 +2,50 @@ import argparse
 import pandas
 
 
-def main():
-    args = _parse_args()
-
-    if not len(args.insertion_sets) == len(args.run_names):
-        raise ValueError("The number of names is not equal to the number of sets!")
+def main(options):
 
     # Load and merge frames, injecting run names as extra column
     ins_frames = []
-    for run_name, set_file in zip(args.run_names, args.insertion_sets):
-        ins_frame = pandas.read_csv(set_file, sep='\t')
-        ins_frame['run'] = run_name
+    for ins_file in options.insertion_sets:
+        ins_frame = pandas.read_csv(ins_file, sep='\t')
         ins_frames.append(ins_frame)
     ins_merged = pandas.concat(ins_frames, ignore_index=True)
 
-    # Mask samples if requested. Argument 'keep_only_masked'
-    # determines if samples in the mask are kept or discarded.
-    # First we check if all masked samples are indeed present
-    # in the data set to avoid issues due to spelling errors etc.
-
+    ## First we check if all masked samples are indeed present
+    ## in the data set to avoid issues due to spelling errors etc.
     sample_set = set(ins_merged['sample'])
-    for sample in args.masked_samples:
+    for sample in options.masked_samples:
         if sample not in sample_set:
             print("WARNING: Requested masked sample %s was not encountered in the dataset." % sample)
 
-    ins_in_mask = ins_merged['sample'].isin(args.masked_samples)
-    if args.keep_only_masked:
+    ## Mask samples if requested. Argument 'keep_only_masked'
+    ## determines if samples in the mask are kept or discarded.
+    ins_in_mask = ins_merged['sample'].isin(options.masked_samples)
+    if options.keep_only_masked:
         ins_merged = ins_merged[ins_in_mask]
     else:
         ins_merged = ins_merged[~ins_in_mask]
 
     # Reset the ids in the merged frame to ensure ids are unique
-    ins_merged['id'] = ['INS_%d' % d for d in range(1, len(ins_merged)+1)]
+    if any(ins_merged['id'].duplicated()):
+        raise ValueError('Resulting merged frame contains duplicate ids.')
 
-    ins_merged.to_csv(args.merged_output, sep='\t', index=False)
+    ins_merged.to_csv(options.merged_output, sep='\t', index=False)
 
 
 def _parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-i', '--input', dest='insertion_sets', required=True, nargs='+')
-    parser.add_argument('-n', '--names', dest='run_names', required=True, nargs='+')
-    parser.add_argument('-o', '--output', dest='merged_output', required=True)
-    parser.add_argument('-m', '--mask', dest='masked_samples', default=[], nargs='+')
-    parser.add_argument('--only-keep-mask', dest='keep_only_masked', default=False, action='store_true')
+    parser.add_argument('-i', '--insertion-sets', dest='insertion_sets', required=True, nargs='+')
+    parser.add_argument('-o', '--output-set', dest='merged_output', required=True)
+    parser.add_argument('-m', '--masked-samples', dest='masked_samples', default=[], nargs='+')
+    parser.add_argument('--masked-only', dest='keep_only_masked', default=False, action='store_true')
 
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    main()
+    main(_parse_args())
 
 
 
