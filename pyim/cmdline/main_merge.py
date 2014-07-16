@@ -1,4 +1,3 @@
-
 import argparse
 import pandas
 
@@ -25,7 +24,7 @@ def main():
     sample_set = set(ins_merged['sample'])
     for sample in args.masked_samples:
         if sample not in sample_set:
-            print "WARNING: Requested masked sample %s was not encountered in the dataset." % sample
+            print("WARNING: Requested masked sample %s was not encountered in the dataset." % sample)
 
     ins_in_mask = ins_merged['sample'].isin(args.masked_samples)
     if args.keep_only_masked:
