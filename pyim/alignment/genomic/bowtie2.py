@@ -21,7 +21,7 @@ class Bowtie2Aligner(GenomicAligner):
 
         cmd = "bowtie2 -p {n_cpus} -k {n_hits} -x {reference} -f -U {fasta} -S {output}"
         cmd_fmt = cmd.format(reference=reference, fasta=reads_path, n_hits=self.max_hits,
-                              output=output_path, n_cpus=self.num_cores)
+                             output=output_path, n_cpus=self.num_cores)
 
         log_path = output_path + '.log'
         with open(log_path, 'w') as stderr:
@@ -32,7 +32,7 @@ class Bowtie2Aligner(GenomicAligner):
     def _read_output(self, file_path):
         sam_file = pysam.Samfile(file_path, "r")
 
-        alignments= []
+        alignments = []
         for read in sam_file.fetch():
             if read.tid != -1:
                 alignment = GenomicAlignment(query_name=read.qname,

@@ -1,9 +1,10 @@
+from os import path
 
 import rpy2.robjects as robjects
 import pandas.rpy.common as com
 import pandas
 
-KCRBM_DIR = 'lib/kcrbm'
+KCRBM_DIR = path.join(path.dirname(__file__), '../../../lib/kcrbm')
 
 
 def kcrbm_assign_genes(insertions):
