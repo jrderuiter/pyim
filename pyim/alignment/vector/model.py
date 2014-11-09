@@ -1,6 +1,6 @@
-
 from collections import namedtuple
 
-Alignment = namedtuple('Alignment', ['query_name', 'query_start', 'query_end', 'query_seq',
-                                     'target_name', 'target_start', 'target_end', 'target_seq',
-                                     'score', 'identity', 'alignment', 'type'])
+
+VectorAlignment = namedtuple('VectorAlignment', 
+    ['q_name', 'q_start', 'q_end', 
+     'v_name', 'v_start', 'v_end'])

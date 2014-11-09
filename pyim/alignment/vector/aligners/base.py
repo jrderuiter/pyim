@@ -1,122 +1,107 @@
-import pandas
-
-from pyim.alignment.vector.model import Alignment
-from pyim.alignment.vector.algorithms.waterman import water
-from pyim.alignment.vector.algorithms.lcs import longest_common_subsequence
+from pyim.alignment.vector.config import aligner_from_options
+from pyim.alignment.vector.model import VectorAlignment
 
 
-class ReadAligner(object):
+class VectorAligner(object):
+    """docstring for VectorAligner"""
 
-    def __init__(self, filters=None):
-        self.filters = filters
+    def __init__(self, seq_aligner=None):
+        super(VectorAligner, self).__init__()
+    
+        if seq_aligner is None:
+            seq_aligner = ExactSequenceAligner()
 
-    def align_target(self, reads, target):
-        alignment, unmapped = self._align_target(reads, target)
+        self.aligner = seq_aligner
+        
+    def align(self, sequences, vector):
+        return self.aligner.align(sequences, vector)
 
-        if type(alignment) == list or type(alignment) == dict:
-            alignment = self._alignments_to_frame(alignment)
+    def align_multiple(self, sequences, vectors):
+        return self.aligner.align_multiple(sequences, vectors)
 
-        if self.filters is not None:
-            alignment, unmapped = self._apply_filters(alignment, unmapped)
+    @classmethod
+    def from_options(Class, options):
+        aligner = aligner_from_options(options)
+        return Class(seq_aligner=aligner)
+                                 
 
-        return alignment, unmapped
+class SequenceAligner(object):
+    """docstring for SequenceAligner"""
 
-    def _align_target(self, reads, target):
+    def __init__(self, options=None):
+        super(SequenceAligner, self).__init__()
+        self.options = options
+
+    def align(self, queries, vector):
+        self._align(queries, vector)
+
+    def _align(self, queries, vector):
         raise NotImplementedError
 
-    def align_targets(self, reads, targets):
-        if type(targets) == dict:
-            targets = targets.values()
+    def align_multiple(self, queries, vectors):
+        alignments = self._align_multiple(queries, vectors)
+        merged = self._merge_alignments(alignments)
+        return merged
 
-        alignments, unmapped_reads = {}, {}
-        for target in targets:
-            tgt_alignments, tgt_unmapped = self.align_target(reads, target)
-            alignments[target.name] = tgt_alignments
-            unmapped_reads[target.name] = tgt_unmapped
+    def _align_multiple(self, queries, vectors):
+        return [self.align(queries, v) for v in vectors]
 
-        return alignments, unmapped_reads
+    def _merge_alignments(self, alignments):
+        merged, duplicates = {}, {}
+        
+        ## Merge all alignments, marking duplicates. Note we 
+        ## don't collect the first entry of a duplicate (which
+        ## is already inserted into merged) until the next step,
+        ## as this allows us to avoid an extra key lookup in 
+        ## the duplicates dictionary.
+        for vec_alns in alignments:
+            for aln in vec_alns.values():
+                query_name = aln.q_name
 
-    def _alignments_to_frame(self, alns):
-        if len(alns) == 0:
-            return None
-        values = list(alns.values()) if type(alns) == dict else alns
-        return pandas.DataFrame(values, columns=values[0]._fields)
+                if query_name not in merged:
+                    merged[query_name] = aln
+                else:
+                    duplicates = [aln]
+        
+        ## Now we collect the first entry of a duplicate.
+        for query_name in duplicates.keys():
+            duplicates[query_name].append(merged[query_name])
 
-    def _apply_filters(self, alignment, unmapped):
-        filtered_alignment = alignment
-        for filt in self.filters:
-            filtered_alignment, _, dropped = filt.apply(filtered_alignment)
-            unmapped = unmapped + dropped
-        return filtered_alignment, unmapped
+        ## And finally we attempt to resolve the duplicates.
+        ## If we can't resolve the duplicates (resolve function
+        ## returns None), then we delete the entire alignment.
+        for query_name, dupl in duplicates.items():
+            resolved = self._resolve_duplicates(dupl)
 
-    def __str__(self):
-        return self.__class__.__name__
-
-
-class ExactReadAligner(ReadAligner):
-
-    def _align_target(self, reads, target):
-        tgt_seq, tgt_len = target.seq, len(target.seq)
-
-        alignments, unmapped_seqs = {}, []
-        for read in reads:
-            if tgt_seq in read.seq:
-                start = read.seq.index(tgt_seq)
-                cigar_str = '%dM' % tgt_len
-
-                alignment = Alignment(read.name, start, start + tgt_len, read.seq,
-                                      target.name, 0, tgt_len, tgt_seq,
-                                      100, 1.0, cigar_str, 'exact')
-                alignments[read.name] = alignment
+            if resolved is None:
+                print("WARNING: Can't resolve multiple alignments " + \
+                      "for %s, dropping alignments." % query_name)
+                del merged[query_name]
             else:
-                unmapped_seqs.append(read)
+                merged[query_name] = resolved
+        
+        return merged
 
-        return alignments, unmapped_seqs
-
-
-class InexactReadAligner(ReadAligner):
-
-    def __init__(self, filters=None, min_score=0):
-        super(InexactReadAligner, self).__init__(filters)
-        self.min_score = min_score
-
-    def _align(self, fasta_seq, target_seq):
-        raise NotImplementedError
-
-    def _align_target(self, fasta_seqs, target_seq):
-        alignments, unmapped_reads = {}, []
-
-        for fasta_seq in fasta_seqs:
-            alignment = self._align(fasta_seq, target_seq)
-
-            if alignment.score >= self.min_score:
-                alignments[fasta_seq.name] = alignment
-            else:
-                unmapped_reads.append(fasta_seq)
-
-        return alignments, unmapped_reads
+    def _resolve_duplicates(self, duplicates):
+        return None
 
 
-class WatermanAligner(InexactReadAligner):
+class ExactSequenceAligner(SequenceAligner):
+    """docstring for ExactSequenceAligner"""
 
-    def __init__(self, filters=None, min_score=0, match_score=5, mismatch_score=-9, gap_score=-5, verbose=False):
-        super(WatermanAligner, self).__init__(filters, min_score)
-
-        self.verbose = verbose
-        self.match_score = match_score
-        self.mismatch_score = mismatch_score
-        self.gap_score = gap_score
-
-    def _align(self, fasta_seq, target_seq):
-        return water(fasta_seq, target_seq, matchScore=self.match_score,
-                     mismatchScore=self.mismatch_score, gapScore=self.gap_score,
-                     verbose=self.verbose)
-
-
-class LCSAligner(InexactReadAligner):
-
-    def _align(self, fasta_seq, target_seq):
-        return longest_common_subsequence(fasta_seq, target_seq)
-
-
-
+    def _align(self, queries, vector):
+        v_seq = vector.sequence
+        v_len = len(v_seq)
+        
+        alignments = {}
+        for q in queries:
+            try: 
+                ind = q.sequence.index(v_seq)
+                aln = VectorAlignment(
+                    q_name=q.name, q_start=ind, q_end=ind + v_len,
+                    v_name=vector.name, v_start=0, v_end=v_len)
+                alignments[q.name] = aln
+            except ValueError:
+                pass
+            
+        return alignments

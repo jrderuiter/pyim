@@ -1,0 +1,15 @@
+options = {
+    'type': 'ExactSequenceAligner',
+    'options': None
+}
+
+options = {
+    'type': 'ParallelQuerySequenceAligner',
+    'options': {
+        'aligner': {
+            'type': 'ExactSequenceAligner',
+            'options': {}
+        },
+        'threads': 5
+    }
+}
