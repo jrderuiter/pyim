@@ -1,0 +1,17 @@
+reference: /Volumes/Datastore/Julian/References/mus_musculus/mm10/dna/Bowtie2/Mus_musculus.GRCm38.dna.primary_assembly
+barcode_file: /Users/Julian/Software/python/im/pyim_new/data/SB_barcodes.fa
+
+min_genomic_length: 15
+threads: 2
+
+sb_sequence: GTGTATGTAAACTTCCGACTTCAAC
+sb_aligner:
+    type: ExactSequenceAligner
+    options:
+
+t7_sequence: CCTATAGTGAGTCGTATTA
+t7_aligner:
+    type: ExactSequenceAligner
+    options:
+
+

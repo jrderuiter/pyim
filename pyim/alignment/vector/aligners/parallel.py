@@ -1,21 +1,20 @@
 from math import ceil
-from multiprocessing import Pool
 from functools import partial
-from itertools import chain
+import multiprocessing
 
-from .pyim.alignment.vector.aligners.base import SequenceAligner
-from pyim.alignment.general.vector.config import aligner_from_options
+from pyim.alignment.vector.aligners import SequenceAligner
+from pyim.common.util import chunks
 
 
 class ParallelSequenceAligner(SequenceAligner):
 
-    def __init__(self, aligner, threads, options=None):
-        super(ParallelSequenceAligner, self).__init__(options)
+    def __init__(self, aligner, threads):
+        super(ParallelSequenceAligner, self).__init__()
 
-        ## If aligner is a dict it has been supplied as
-        ## an option dict. Try to instantiate from options.
-        if type(aligner) == dict:
-            aligner = aligner_from_options(aligner)
+        if isinstance(aligner, ParallelSequenceAligner):
+            raise ValueError(('Cannot parallelize an aligner that is already '
+                              'operating in parallel ({})').
+                             format(aligner.__class__.__name__))
 
         self.aligner = aligner
         self.threads = threads
@@ -33,29 +32,32 @@ class ParallelQuerySequenceAligner(ParallelSequenceAligner):
             chunk_size = len(queries)/float(self.threads)
             chunk_size = int(ceil(chunk_size))
 
+        ## Divide queries into chunks.
+        query_chunks = chunks(queries, chunk_size)
+
         ## Perform alignment per chunk in parallel.
-        pool = Pool(self.threads)
+        pool = multiprocessing.Pool(self.threads)
        
         func = partial(_align, vector=vector, aligner=self.aligner)
-        results = pool.map(func, queries, chunk_size)
+        results = pool.map(func, query_chunks)
        
         pool.close()
         pool.join()
 
         ## Combine results into a single dictionary.
-        merged = dict(chain((r.items() for r in results)))
-        
+        merged = { k: v for d in results for k, v in d.items()}
+
         return merged
 
 
 class ParallelVectorSequenceAligner(ParallelSequenceAligner):
 
     ## Perform alignment per vector in parallel.
-    def _align_multiple(self, queries, vectors, chunk_size=1):
-        pool = Pool(self.threads)
+    def _align_multiple(self, queries, vectors):
+        pool = multiprocessing.Pool(self.threads)
         
         func = partial(_align, queries=queries, aligner=self.aligner)
-        results = pool.map(func, vectors, chunk_size)
+        results = pool.map(func, vectors, 1)
         
         pool.close()
         pool.join()

@@ -1,46 +1,56 @@
 import pandas
 
 from pyim.common.model import Sequence
-from pyim.alignment.general.vector.aligners import VectorAligner
+from pyim.alignment.vector.aligners import VectorAligner
+from pyim.alignment.vector.factory import SequenceAlignerFactory
 from pyim.alignment.genome.aligners import Bowtie2Aligner
 from pyim.common.io import read_fasta
 from pyim.common.model import Insertion
 
-SB_SEQUENCE = 'GTGTATGTAAACTTCCGACTTCAAC'
-T7_SEQUENCE = 'CCTATAGTGAGTCGTATTA'
-
-REFERENCE = '/Volumes/Datastore/Julian/References/mus_musculus/' + \
-            'mm10/dna/Bowtie2/Mus_musculus.GRCm38.dna.primary_assembly'
-
-BARCODES = list(read_fasta('/Users/Julian/Software/python/im/pyim_new/data/SB_barcodes.fa'))[0:10]
 
 class SbPipeline(object):
 
-    @classmethod
-    def run(Class, options):
-        # TODO: supply options externally (and use them).
-        # TODO: somehow specify which aligners are used (and their options).
+    REQUIRED_ARGS = ['reference', 'barcode_file', 'sb_sequence', 'sb_aligner',
+                     't7_sequence', 't7_aligner', 'min_genomic_length']
 
-        sequences = list(read_fasta(options.input))
+    @classmethod
+    def check_config(cls, config):
+        ## Check required config arguments.
+        for req_arg in cls.REQUIRED_ARGS:
+            if req_arg not in config or config[req_arg] is None:
+                raise ValueError('Missing required argument {}'.format(req_arg))
+
+
+
+    @classmethod
+    def run(cls, input_path, output_path, config):
+        cls.check_config(config)
+
+        sequences = list(read_fasta(input_path))
 
         ## Match barcodes
-        barcodes = match_barcodes(sequences, BARCODES)
+        barcode_seqs = list(read_fasta(config['barcode_file']))[0:10]
+        barcodes = match_barcodes(sequences, barcode_seqs)
 
         ## Align to vectors
-        sb = Sequence(name='SB', sequence=SB_SEQUENCE)
-        t7 = Sequence(name='T7', sequence=T7_SEQUENCE)
+        sb = Sequence(name='SB', sequence=config['sb_sequence'])
+        sb_aligner = SequenceAlignerFactory.make_from_options(config['sb_aligner'])
 
-        vec_alignments = align_to_vectors(sequences, [sb, t7])
+        t7 = Sequence(name='T7', sequence=config['t7_sequence'])
+        t7_aligner = SequenceAlignerFactory.make_from_options(config['t7_aligner'])
+
+        vec_alignments = align_to_vectors(sequences, [sb, t7], [sb_aligner, t7_aligner])
 
         ## Extract genomic sequences using vector alignments.
         genomic_seqs = extract_genomic(sequences, vec_alignments)
-        genomic_seqs = {k: v for k, v in genomic_seqs.items() if len(v.sequence) >= 15}
+        genomic_seqs = {k: v for k, v in genomic_seqs.items()
+                        if len(v.sequence) >= config['min_genomic_length']}
 
-        genomic_alns = align_to_reference(genomic_seqs.values(), REFERENCE)
+        genomic_alns = align_to_reference(genomic_seqs.values(), config['reference'])
 
         ## Map alignments to unique insertions.
         insertions = map_insertions(genomic_alns, barcodes)
-        Insertion.to_file(insertions, '/Users/Julian/Desktop/insertions.txt')
+        Insertion.to_file(insertions, output_path)
 
 
 def match_barcodes(sequences, barcodes):
@@ -51,7 +61,7 @@ def match_barcodes(sequences, barcodes):
 
 def align_to_vectors(sequences, vectors, aligners=None):
     if aligners is None:
-        aligners = [VectorAligner() for v in vectors]
+        aligners = [VectorAligner() for _ in vectors]
 
     alignments = {}
     for vector, aligner in zip(vectors, aligners):

@@ -3,8 +3,8 @@ from pyim.alignment.vector.aligners import SequenceAligner
 
 class ChainedReadAligner(SequenceAligner):
 
-    def __init__(self, aligners, options=None):
-        super(ChainedReadAligner, self).__init__(options)
+    def __init__(self, aligners):
+        super(ChainedReadAligner, self).__init__()
         self.aligners = aligners
 
     def _align(self, queries, vector):

@@ -1,4 +1,3 @@
-from pyim.alignment.vector.config import aligner_from_options
 from pyim.alignment.vector.model import VectorAlignment
 
 
@@ -18,22 +17,16 @@ class VectorAligner(object):
 
     def align_multiple(self, sequences, vectors):
         return self.aligner.align_multiple(sequences, vectors)
-
-    @classmethod
-    def from_options(Class, options):
-        aligner = aligner_from_options(options)
-        return Class(seq_aligner=aligner)
                                  
 
 class SequenceAligner(object):
     """docstring for SequenceAligner"""
 
-    def __init__(self, options=None):
+    def __init__(self):
         super(SequenceAligner, self).__init__()
-        self.options = options
-
+        
     def align(self, queries, vector):
-        self._align(queries, vector)
+        return self._align(queries, vector)
 
     def _align(self, queries, vector):
         raise NotImplementedError
@@ -95,7 +88,7 @@ class ExactSequenceAligner(SequenceAligner):
         
         alignments = {}
         for q in queries:
-            try: 
+            try:
                 ind = q.sequence.index(v_seq)
                 aln = VectorAlignment(
                     q_name=q.name, q_start=ind, q_end=ind + v_len,
