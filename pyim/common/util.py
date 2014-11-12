@@ -1,3 +1,5 @@
+from itertools import repeat, chain
+
 
 def chunks(l, n):
     """Divide a list l into chunks of size n.
@@ -18,3 +20,11 @@ def chunks(l, n):
     """
 
     return [l[i:i+n] for i in range(0, len(l), n)]
+
+
+def repeat_list(l, n):
+    return chain(*[repeat(el, num) for el, num in zip(l, n)])
+
+
+def flatten_list(l):
+    return [item for sub_list in l for item in sub_list]
