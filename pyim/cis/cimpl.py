@@ -1,6 +1,7 @@
 __author__ = 'Julian'
 
-import numpy as np
+
+import readline  # Work-around for: ../lib/libreadline.so.6: undefined symbol: PC
 
 from rpy2 import robjects
 from rpy2.robjects import pandas2ri
