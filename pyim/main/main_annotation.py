@@ -1,44 +1,81 @@
 import argparse
-import pandas
+
+from natsort import index_natsorted
+
+from pyim_common.io import insertion
+
+from pyim.annotation.gff import GffAnnotator
 from pyim.annotation.kcrbm import KcrbmAnnotator
 
 ANNOTATORS = {
+    'gtf': GffAnnotator,
     'kcrbm': KcrbmAnnotator
 }
 
 
-def annotation_main(options):
-    ## TODO: generalize arguments to annotator.
-    try:
-        class_ = ANNOTATORS[options.annotator]
-    except KeyError:
-        raise KeyError('Unknown annotator "{}"'.format(options.annotator))
+def add_subparser(subparsers, annotator_class, name):
+    parser = subparsers.add_parser(name=name)
 
-    insertions = pandas.read_csv(options.input, sep='\t')
-    annotator = class_(genome='mm10', system='SB')
+    # Add default positional.
+    parser.add_argument('input')
+    parser.add_argument('output')
 
-    if options.method == 'gene':
-        annotation = annotator.annotate_by_gene(insertions)
-    elif options.method == 'transcript':
-        annotation = annotator.annotate_by_transcript(insertions)
-    else:
-        raise ValueError('Unknown annotation method {}'.format(options.method))
+    # Add class specific options.
+    annotator_class.configure_argparser(parser)
 
-    annotation.to_csv(options.output, sep='\t', index=False, header=True)
+    # Add default options.
+    parser.add_argument('--method', default='gene', choices=['gene', 'transcript'])
+
+    return parser
 
 
-def _parse_args():
+def main():
+
+    # Setup main argument parser and annotator specific sub-parsers.
     parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(help='sub-command help', dest='annotator')
 
-    parser.add_argument('-i', '--input', required=True)
-    parser.add_argument('-o', '--output', required=True)
-    parser.add_argument('-m', '--method', required=True)
+    for name, class_ in ANNOTATORS.items():
+        add_subparser(subparsers, class_, name)
 
-    parser.add_argument('-a', '--annotator', default='kcrbm')
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    # Check if a sub-parser was chosen.
+    if args.annotator is None:
+        raise ValueError('No annotator was specified as sub command '
+                         '(choose from {})' .format(', '.join(ANNOTATORS.keys())))
+
+    # Parse options and extract main input/output/method parameters.
+    options = vars(args)
+
+    input_path = options.pop('input')
+    output_path = options.pop('output')
+    method = options.pop('method')
+
+    # Instantiate chosen pipeline and run!
+    annotator_name = options.pop('annotator')
+    try:
+        annotator_class = ANNOTATORS[annotator_name]
+    except KeyError:
+        raise ValueError('Annotator \'{}\' does not exist'.format(annotator_name))
+    else:
+        annotator = annotator_class(**options)
+
+        # Load insertions from input file.
+        ins_frame = insertion.read_frame(input_path)
+
+        # Annotate insertions using the requested method.
+        if method == 'gene':
+            annotation = annotator.annotate_by_gene(ins_frame)
+        elif method == 'transcript':
+            annotation = annotator.annotate_by_transcript(ins_frame)
+        else:
+            raise ValueError('Unknown method {}'.format(method))
+
+        # Write output annotation.
+        annotation = annotation.iloc[index_natsorted(annotation['name'])]
+        annotation.to_csv(output_path, sep='\t', index=False)
 
 
 if __name__ == '__main__':
-    annotation_main(_parse_args())
-
+    main()

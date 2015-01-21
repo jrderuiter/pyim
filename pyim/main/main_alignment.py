@@ -1,39 +1,56 @@
 import argparse
-import yaml
-from pyim.alignment.pipelines.sb import SbPipeline
+
+from pyim.alignment.pipelines.lam_pcr import LamPcrPipeline
 
 PIPELINES = {
-    'sb': SbPipeline
+    'lam_pcr': LamPcrPipeline
 }
 
 
-def alignment_main(options):
-    ## Look-up the requested pipeline.
-    try:
-        pipeline = PIPELINES[options.pipeline]
-    except KeyError:
-        raise KeyError('Unknown pipeline "{}"'.format(options.pipeline))
+def add_subparser(subparsers, annotator_class, name):
+    parser = subparsers.add_parser(name=name)
 
-    ## Load pipeline config.
-    with open(options.config, 'r') as config_file:
-        config = yaml.load(config_file)
+    # Add default options.
+    parser.add_argument('input')
+    parser.add_argument('output')
 
-    ## Actually run the pipeline!
-    pipeline.run(options.input, options.output, config)
+    # Add class specific options.
+    annotator_class.configure_argparser(parser)
+
+    return parser
 
 
-def _parse_args():
+def main():
+
+    # Setup main argument parser and annotator specific sub-parsers.
     parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(help='sub-command help', dest='pipeline')
 
-    parser.add_argument('-i', '--input', required=True)
-    parser.add_argument('-o', '--output', required=True)
+    for name, class_ in PIPELINES.items():
+        add_subparser(subparsers, class_, name)
 
-    parser.add_argument('-p', '--pipeline', default='sb')
-    parser.add_argument('-c', '--config', required=True)
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    # Check if a sub-parser was chosen.
+    if args.pipeline is None:
+        raise ValueError('No pipeline was specified as sub-command '
+                         '(choose from {})' .format(', '.join(PIPELINES.keys())))
+
+    # Parse options and extract main input/output parameters.
+    options = vars(parser.parse_args())
+    input_path = options.pop('input')
+    output_path = options.pop('output')
+
+    # Instantiate chosen pipeline and run!
+    pipeline_name = options.pop('pipeline')
+    try:
+        pipeline_class = PIPELINES[pipeline_name]
+    except KeyError:
+        raise ValueError('Pipeline \'{}\' does not exist'.format(pipeline_name))
+    else:
+        pipeline = pipeline_class(**options)
+        pipeline.run(input_path, output_path)
 
 
 if __name__ == '__main__':
-    alignment_main(_parse_args())
-
+    main()

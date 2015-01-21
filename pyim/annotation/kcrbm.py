@@ -9,7 +9,7 @@ from rpy2.robjects.packages import importr
 
 from pyim_common.util.list import repeat_list, flatten_list
 
-from pyim.annotation.annotator import Annotator
+from pyim.annotation.base import Annotator
 
 
 class KcrbmAnnotator(Annotator):
@@ -24,6 +24,13 @@ class KcrbmAnnotator(Annotator):
 
         self.genome = genome
         self.system = system
+
+    @classmethod
+    def configure_argparser(cls, parser):
+        parser = super(KcrbmAnnotator, cls).configure_argparser(parser)
+        parser.add_argument('--system', default='SB', choices=['SB'])
+        parser.add_argument('--genome', default='mm10', choices=['mm10'])
+        return parser
 
     def annotate_by_gene(self, insertions):
         kcrbm_ins = self._convert_to_kcrbm_frame(insertions)
@@ -49,7 +56,7 @@ class KcrbmAnnotator(Annotator):
     @staticmethod
     def _convert_to_kcrbm_frame(insertions):
         # Extract and rename required columns.
-        kcrbm_frame = insertions.ix[:, ['id', 'seqname', 'location', 'strand']]
+        kcrbm_frame = insertions.ix[:, ['name', 'seqname', 'location', 'strand']]
         kcrbm_frame.columns = ['id', 'chr', 'base', 'ori']
 
         # Map chromosomes to numeric values.
@@ -80,10 +87,10 @@ class KcrbmAnnotator(Annotator):
     @staticmethod
     def _parse_gene_result(result):
         result = result.ix[result['ensid'].astype(str) != 'NA']
-        return pandas.DataFrame({'id': result['ins_id'],
+        return pandas.DataFrame({'name': result['ins_id'],
                                  'gene': result['ensid'],
                                  'mechanism': result['mechanism']},
-                                columns=['id', 'gene', 'mechanism'])
+                                columns=['name', 'gene', 'mechanism'])
 
     @staticmethod
     def _parse_transcript_result(result):
@@ -97,7 +104,7 @@ class KcrbmAnnotator(Annotator):
         ins_id = list(repeat_list(result['ins_id'], counts))
         ens_id = list(repeat_list(result['ensid'], counts))
 
-        return pandas.DataFrame({'id': ins_id, 'gene': ens_id,
+        return pandas.DataFrame({'name': ins_id, 'gene': ens_id,
                                  'transcript': flatten_list(tr_list),
                                  'mechanism': flatten_list(mech_list)},
-                                columns=['id', 'gene', 'transcript', 'mechanism'])
+                                columns=['name', 'gene', 'transcript', 'mechanism'])
