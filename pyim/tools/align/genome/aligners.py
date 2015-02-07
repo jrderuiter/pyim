@@ -2,12 +2,10 @@ import subprocess
 from os import path
 
 import pysam
-
 from skbio.io import write as skbio_write
-
 from pyim_common.io import work_directory
 
-from .model import GenomicAlignment
+from pyim.tools.align.genome.model import GenomicAlignment
 
 
 class ReferenceAligner(object):

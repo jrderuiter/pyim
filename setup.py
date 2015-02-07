@@ -15,7 +15,7 @@ install_requires = [
 
 setup(
     name='pyim',
-    version='0.3',
+    version='0.4.0',
     url='',
     author='Julian de Ruiter',
     author_email='j.r.deruiter@icloud.com',
@@ -24,9 +24,9 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     entry_points={'console_scripts': [
-        'pyim-align = pyim.main.main_alignment:main',
-        'pyim-annotate = pyim.main.main_annotation:main',
-        'pyim-cis = pyim.main.main_cis:main'
+        'pyim-align = pyim.tools.alignment.main:main',
+        'pyim-annotate = pyim.tools.annotation.main:main',
+        'pyim-cis = pyim.tools.cis.main:main'
     ]},
     extras_require={},
     zip_safe=True,

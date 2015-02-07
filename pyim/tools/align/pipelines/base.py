@@ -2,7 +2,7 @@ __author__ = 'Julian'
 
 from pyim_common.util import flatten_list
 
-from pyim.alignment.util import chunk_alignments
+from pyim.tools.align.util import chunk_alignments
 
 
 class Pipeline(object):

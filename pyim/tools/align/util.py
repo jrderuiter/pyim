@@ -42,5 +42,5 @@ def chunk_alignments(alignments, max_dist=5000):
 
         prev_pos = aln.pos
 
-    ## Don't forget our final yield.
+    # Don't forget our final yield.
     yield chunk

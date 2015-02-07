@@ -1,6 +1,6 @@
 import argparse
 
-from pyim.alignment.pipelines.lam_pcr import LamPcrPipeline
+from pyim.tools.align.pipelines.lam_pcr import LamPcrPipeline
 
 PIPELINES = {
     'lam_pcr': LamPcrPipeline

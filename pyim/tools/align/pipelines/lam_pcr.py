@@ -2,11 +2,10 @@ __author__ = 'Julian'
 
 from numpy import sum as np_sum
 from pysam import AlignmentFile
-
 from pyim_common.model.insertion import Insertion
 
 from .base import Pipeline
-from ..util import alignment_frame
+from pyim.tools.align.util import alignment_frame
 
 
 class LamPcrPipeline(Pipeline):

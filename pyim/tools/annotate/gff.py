@@ -1,11 +1,10 @@
 __author__ = 'Julian'
 
 import pandas
-
 from pyim_common.io import gff
 from pyim_common.util.frame import reorder_columns
 
-from .base import Annotator
+from pyim.tools.annotate.base import Annotator
 
 
 class GffAnnotator(Annotator):

@@ -1,47 +1,54 @@
 import pandas
 from skbio import DNASequence
 from skbio.io import read as skbio_read
-
-
 from pyim_common.model.insertion import Insertion
 
 from pyim.common.alignment.vector.aligners import VectorAligner
-from pyim.common.alignment.vector.factory import SequenceAlignerFactory
+from .base import Pipeline
+from ..pyim.tools.alignment.genome.aligners import Bowtie2Aligner
 
-from ..genome.aligners import Bowtie2Aligner
 
+class SbPipeline(Pipeline):
 
-class SbPipeline(object):
+    def __init__(self, reference, barcode_file, sb_sequence,
+                 t7_sequence, min_genomic_length=15):
+        super(SbPipeline, self).__init__()
 
-    REQUIRED_ARGS = ['reference', 'barcode_file', 'sb_sequence', 'sb_aligner',
-                     't7_sequence', 't7_aligner', 'min_genomic_length']
+        self.reference = reference
+        self.barcodes = list(skbio_read(barcode_file, format='fasta',
+                                        constructor=DNASequence))[:10]
+
+        self.sb_sequence = DNASequence(sb_sequence, id='SB')
+        self.t7_sequence = DNASequence(t7_sequence, id='T7')
+
+        self.min_genomic_length = min_genomic_length
 
     @classmethod
-    def check_config(cls, config):
-        # Check required config arguments.
-        for req_arg in cls.REQUIRED_ARGS:
-            if req_arg not in config or config[req_arg] is None:
-                raise ValueError('Missing required argument {}'.format(req_arg))
+    def configure_argparser(cls, parser):
+        parser = super(SbPipeline, cls).configure_argparser(parser)
 
-    @classmethod
-    def run(cls, input_path, output_path, config):
-        cls.check_config(config)
+        parser.add_argument('reference')
+        parser.add_argument('barcode_file')
 
+        parser.add_argument('--sb_sequence', default='GTGTATGTAAACTTCCGACTTCAAC')
+        parser.add_argument('--t7_sequence', default='CCTATAGTGAGTCGTATTA')
+        parser.add_argument('--min_genomic_length', default=15, type=int)
+
+        return parser
+
+    def run(self, input_path, output_path):
         sequences = skbio_read(input_path, format='fasta', constructor=DNASequence)
 
         # Match barcodes
-        barcode_seqs = list(skbio_read(config['barcode_file'], format='fasta',
-                                       constructor=DNASequence))[0:10]
-        barcodes = match_barcodes(sequences, barcode_seqs)
+        barcodes = match_barcodes(sequences, self.barcodes)
 
         # Align to vectors
-        sb = DNASequence(config['sb_sequence'], id='SB')
-        sb_aligner = SequenceAlignerFactory.make_from_options(config['sb_aligner'])
+        # sb_aligner = SequenceAlignerFactory.make_from_options(config['sb_aligner'])
 
-        t7 = DNASequence(config['t7_sequence'], id='T7')
-        t7_aligner = SequenceAlignerFactory.make_from_options(config['t7_aligner'])
+        # t7 = DNASequence(config['t7_sequence'], id='T7')
+        # t7_aligner = SequenceAlignerFactory.make_from_options(config['t7_aligner'])
 
-        vec_alignments = align_to_vectors(sequences, [sb, t7], [sb_aligner, t7_aligner])
+        # vec_alignments = align_to_vectors(sequences, [sb, t7], [sb_aligner, t7_aligner])
 
         # Extract genomic sequences using vector alignments.
         genomic_seqs = extract_genomic(sequences, vec_alignments)
@@ -81,8 +88,7 @@ def extract_genomic(sequences, alignments):
             start = sb_alns[seq.name].q_end
             end = t7_alns[seq.name].q_start
 
-            new_seq = Sequence(name=seq.name, 
-                               sequence=seq.sequence[start:end])
+            new_seq = DNASequence(seq.sequence[start:end], id=seq.name)
 
             genomic_seqs[seq.name] = new_seq
 
