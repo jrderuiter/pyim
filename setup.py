@@ -24,8 +24,8 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     entry_points={'console_scripts': [
-        'pyim-align = pyim.tools.alignment.main:main',
-        'pyim-annotate = pyim.tools.annotation.main:main',
+        'pyim-align = pyim.tools.align.main:main',
+        'pyim-annotate = pyim.tools.annotate.main:main',
         'pyim-cis = pyim.tools.cis.main:main'
     ]},
     extras_require={},
