@@ -16,11 +16,8 @@ def cis_main(args):
                             genome=args.genome, threads=args.threads, verbose=True)
 
     # Extract required information from the cimpl object.
-    cis_obj = cimpl.cis(cimpl_obj, alpha=args.alpha, mul_test=True)
-    cis_mapping = cimpl.cis_mapping(cimpl_obj, cis_obj)
-
-    # Clean-up cis_frame.
-    cis = cimpl.clean_cis_frame(cis_obj)
+    cis = cimpl.cis(cimpl_obj, alpha=args.alpha, mul_test=True)
+    cis_mapping = cimpl.cis_mapping(cimpl_obj, cis)
 
     # Add strand + homogeneity to cis frame.
     cis_strand = cis_strandedness(insertions, cis_mapping)
@@ -33,7 +30,7 @@ def cis_main(args):
 
     # Write output files!
     cis.to_csv(args.output_base + '.cis.txt', sep='\t', index=False)
-    cis_mapping.to_csv(args.output_base + '.cis_mapping.txt', index=False, sep='\t')
+    cis_mapping.to_csv(args.output_base + '.cis.mapping.txt', index=False, sep='\t')
 
 
 def cis_strandedness(insertions, cis_mapping):

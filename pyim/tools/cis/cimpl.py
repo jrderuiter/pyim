@@ -59,10 +59,16 @@ def _cimpl_frame(insertions):
     cimpl_frame.columns = ['id', 'chr', 'location', 'sampleID']
 
     # Add 'chr' prefix to the chromosome names if needed.
-    if not cimpl_frame['chr'][0].startswith('chr'):
-        cimpl_frame['chr'] = ['chr' + c for c in cimpl_frame['chr']]
+    cimpl_frame['chr'] = _prefix_chromosomes(cimpl_frame['chr'])
 
     return pandas_to_dataframe(cimpl_frame)
+
+
+def _prefix_chromosomes(series, prefix='chr'):
+    # Add 'chr' prefix to the chromosome names if needed.
+    if not series[0].startswith('chr'):
+        series = series.map(lambda c: prefix + c)
+    return series
 
 
 def _load_genome(genome):
@@ -82,18 +88,16 @@ def _load_genome(genome):
 def cis(cimpl_obj, alpha=0.05, mul_test=True):
     cis_obj = cimpl_r.getCISs(cimpl_obj, alpha=alpha, mul_test=mul_test)
 
+    # Convert cis to pandas and rename index.
     cis_frame = dataframe_to_pandas(cis_obj).reset_index()
     cis_frame.rename(columns={'index': 'id'}, inplace=True)
 
-    return cis_frame
-
-
-def clean_cis_frame(cis_frame):
-    cis_frame = cis_frame.copy()
-    cis_frame['chromosome'] = cis_frame['chromosome'].str.replace('chr', '')
-
+    # Convert columns to int types.
     for col in ['peak_location', 'start', 'end', 'width', 'n_insertions']:
         cis_frame[col] = cis_frame[col].astype(int)
+
+    # Remove chr prefix from chromosomes.
+    cis_frame['chromosome'] = cis_frame['chromosome'].str.replace('chr', '')
 
     return cis_frame
 
@@ -103,6 +107,7 @@ def cis_mapping(cimpl_obj, cis_frame):
     # ensures CIMPL uses cis id's instead of row indices.
     cis_r = cis_frame.copy()
     cis_r.index = cis_frame['id']
+    cis_r['chromosome'] = _prefix_chromosomes(cis_r['chromosome'])
     cis_r = pandas_to_dataframe(cis_r)
 
     # Retrieve cis matrix from cimpl.
