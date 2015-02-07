@@ -13,7 +13,7 @@ ANNOTATORS = {
 def main():
     # Setup main argument parser and annotator specific sub-parsers.
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(help='sub-command help')
+    subparsers = parser.add_subparsers(help='Annotator to use.')
 
     for name, class_ in ANNOTATORS.items():
         class_.register_parser(subparsers, name)
