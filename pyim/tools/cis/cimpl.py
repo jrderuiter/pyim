@@ -10,12 +10,19 @@ from rpy2.robjects.packages import importr
 
 from .rpy import pandas_to_dataframe, dataframe_to_pandas
 
-cimpl_r = importr('cimpl')
+cimpl_instance = None
 
 
 R_GENOMES = {
     'mm10': 'BSgenome.Mmusculus.UCSC.mm10'
 }
+
+
+def _import_cimpl():
+    global cimpl_instance
+    if cimpl_instance is None:
+        cimpl_instance = importr('cimpl')
+    return cimpl_instance
 
 
 def cimpl(insertions, scales, genome, system=None, specificity_pattern=None,
@@ -46,6 +53,7 @@ def cimpl(insertions, scales, genome, system=None, specificity_pattern=None,
     genome_obj = _load_genome(genome)
 
     # Run CIMPL!
+    cimpl_r = _import_cimpl()
     result = cimpl_r.doCimplAnalysis(
         _cimpl_frame(insertions), scales=scales, n_iterations=n_iterations, BSgenome=genome_obj,
         chromosomes=chromosomes, verbose=verbose, threads=threads, **extra_args)
@@ -86,6 +94,7 @@ def _load_genome(genome):
 
 
 def cis(cimpl_obj, alpha=0.05, mul_test=True):
+    cimpl_r = _import_cimpl()
     cis_obj = cimpl_r.getCISs(cimpl_obj, alpha=alpha, mul_test=mul_test)
 
     # Convert cis to pandas and rename index.
@@ -111,6 +120,7 @@ def cis_mapping(cimpl_obj, cis_frame):
     cis_r = pandas_to_dataframe(cis_r)
 
     # Retrieve cis matrix from cimpl.
+    cimpl_r = _import_cimpl()
     cis_matrix_r = cimpl_r.getCISMatrix(cimpl_obj, cis_r)
     cis_matrix = dataframe_to_pandas(cis_matrix_r)
 
