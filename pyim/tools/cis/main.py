@@ -10,17 +10,21 @@ def cis_main(args):
     insertions = pd.read_csv(args.input, sep='\t')
 
     # Run cimpl on our insertions.
-    cimpl_obj = cimpl.cimpl(insertions, scales=args.scales, n_iterations=args.n_iter,
+    cimpl_obj = cimpl.cimpl(insertions, scales=args.scales, iterations=args.iterations,
                             chromosomes=args.chromosomes, system=args.system,
-                            specificity_pattern=args.specificity_pattern,
+                            pattern=args.pattern, lhc_method=args.lhc_method,
                             genome=args.genome, threads=args.threads, verbose=True)
 
     # Extract required information from the cimpl object.
     cis = cimpl.cis(cimpl_obj, alpha=args.alpha, mul_test=True)
     cis_mapping = cimpl.cis_mapping(cimpl_obj, cis)
 
+    # Merge cis sites if needed.
+    if not args.no_merge:
+        cis = cimpl.merge_cis(cis)
+
     # Add strand + homogeneity to cis frame.
-    cis_strand = cis_strandedness(insertions, cis_mapping)
+    cis_strand = cis_strand_type(insertions, cis_mapping)
     cis = pd.merge(cis, cis_strand, on='id')
 
     # Rename some of the columns for conformity.
@@ -33,7 +37,7 @@ def cis_main(args):
     cis_mapping.to_csv(args.output_base + '.cis.mapping.txt', index=False, sep='\t')
 
 
-def cis_strandedness(insertions, cis_mapping):
+def cis_strand_type(insertions, cis_mapping):
     cis_merged = pd.merge(insertions, cis_mapping, left_on='name', right_on='insertion_id')
     strand_mean = cis_merged.groupby('cis_id')['strand'].mean()
 
@@ -63,14 +67,17 @@ def _parse_args():
 
     parser.add_argument('--genome', default='mm10', choices=['mm10'])
     parser.add_argument('--scales', default=30000, type=int, nargs='+')
-    parser.add_argument('--n-iter', default=1000, type=int)
+    parser.add_argument('--iterations', default=1000, type=int)
     parser.add_argument('--alpha', default=0.05, type=float)
     parser.add_argument('--chromosomes', default=None, nargs='+')
     parser.add_argument('--threads', default=1, type=int)
+    parser.add_argument('--lhc_method', default='none', choices=['none', 'exclude'])
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--system', choices=['SB', 'PB', 'MMTV', 'MuLV'])
-    group.add_argument('--specificity-pattern')
+    group.add_argument('--pattern')
+
+    parser.add_argument('--no_merge', default=False, action='store_true')
 
     return parser.parse_args()
 

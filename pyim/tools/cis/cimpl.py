@@ -4,36 +4,25 @@ __author__ = 'Julian'
 import readline  # Work-around for: ../lib/libreadline.so.6: undefined symbol: PC
 
 import pandas as pd
-
 from rpy2 import robjects
 from rpy2.robjects.packages import importr
 
 from .rpy import pandas_to_dataframe, dataframe_to_pandas
-
-cimpl_instance = None
-
 
 R_GENOMES = {
     'mm10': 'BSgenome.Mmusculus.UCSC.mm10'
 }
 
 
-def _import_cimpl():
-    global cimpl_instance
-    if cimpl_instance is None:
-        cimpl_instance = importr('cimpl')
-    return cimpl_instance
-
-
-def cimpl(insertions, scales, genome, system=None, specificity_pattern=None,
-          n_iterations=100, chromosomes=None, verbose=False, threads=1):
+def cimpl(insertions, scales, genome, system=None, pattern=None, lhc_method='none',
+          iterations=1000, chromosomes=None, verbose=False, threads=1):
     # Fill in chromosomes from data if not specified.
     if chromosomes is None:
         chromosomes = list(insertions['seqname'].unique())
 
     # Determine if system or specific pattern was specified.
-    if specificity_pattern is not None:
-        extra_args = {'specificity_pattern': specificity_pattern}
+    if pattern is not None:
+        extra_args = {'specificity_pattern': pattern}
     elif system is not None:
         extra_args = {'system': system}
     else:
@@ -53,10 +42,11 @@ def cimpl(insertions, scales, genome, system=None, specificity_pattern=None,
     genome_obj = _load_genome(genome)
 
     # Run CIMPL!
-    cimpl_r = _import_cimpl()
+    cimpl_r = importr('cimpl')
     result = cimpl_r.doCimplAnalysis(
-        _cimpl_frame(insertions), scales=scales, n_iterations=n_iterations, BSgenome=genome_obj,
-        chromosomes=chromosomes, verbose=verbose, threads=threads, **extra_args)
+        _cimpl_frame(insertions), scales=scales, n_iterations=iterations,
+        lhc_method=lhc_method, threads=threads, BSgenome=genome_obj,
+        chromosomes=chromosomes, verbose=verbose, **extra_args)
 
     return result
 
@@ -94,7 +84,7 @@ def _load_genome(genome):
 
 
 def cis(cimpl_obj, alpha=0.05, mul_test=True):
-    cimpl_r = _import_cimpl()
+    cimpl_r = importr('cimpl')
     cis_obj = cimpl_r.getCISs(cimpl_obj, alpha=alpha, mul_test=mul_test)
 
     # Convert cis to pandas and rename index.
@@ -120,7 +110,7 @@ def cis_mapping(cimpl_obj, cis_frame):
     cis_r = pandas_to_dataframe(cis_r)
 
     # Retrieve cis matrix from cimpl.
-    cimpl_r = _import_cimpl()
+    cimpl_r = importr('cimpl')
     cis_matrix_r = cimpl_r.getCISMatrix(cimpl_obj, cis_r)
     cis_matrix = dataframe_to_pandas(cis_matrix_r)
 
@@ -138,6 +128,18 @@ def cis_mapping(cimpl_obj, cis_frame):
     mapping = mapping.ix[mapping['cis_id'] != '']
 
     return mapping
+
+
+def merge_cis(cis_frame):
+    """ Merge cis sites that are in fact the same, but appear multiple times
+        with different peak_height locations.
+    :param cis_frame:
+    :return:
+    """
+
+    cols = ['chromosome', 'start', 'end', 'width', 'n_insertions', 'scale']
+    return pd.DataFrame((grp.ix[grp['peak_height'].argmax()]
+                         for _, grp in cis_frame.groupby(cols)))
 
 
 def _expand_column(frame, col, delim):
