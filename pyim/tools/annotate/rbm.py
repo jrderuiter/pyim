@@ -18,7 +18,7 @@ WINDOW_PRESETS = {
 class RbmAnnotator(Annotator):
 
     def __init__(self, gtf_file, windows=None, preset=None,
-                 homogeneity=None, feature_type='gene'):
+                 homogeneity=None, feature_type='gene', id_column='id'):
         super(Annotator, self).__init__()
 
         if windows is None and preset is None:
@@ -27,16 +27,24 @@ class RbmAnnotator(Annotator):
         if preset is not None:
             windows = WINDOW_PRESETS[preset]
 
-        self.features = gff.read(gtf_file)
-        self.feature_type = feature_type
-        self.windows = windows
-        self.homogeneity = homogeneity
+        self._features = gff.read(gtf_file)
+        self._feature_type = feature_type
+        self._windows = windows
+        self._homogeneity = homogeneity
+        self._id_col = id_column
 
-    def annotate(self, frame, feature_type=None):
-        if feature_type is None:
-            feature_type = self.feature_type
-        return rbm(frame, self.features, self.windows,
-                   homogeneity=self.homogeneity, type_=feature_type)
+    def annotate(self, frame, feature_type=None, id_column=None):
+        # Retrieve defaults set in advance if arguments not supplied.
+        feature_type = self._feature_type if feature_type is None else feature_type
+        id_column = self._id_col if id_column is None else id_column
+
+        # Run RBM on frame, setting id_column as index.
+        frame = frame.set_index(id_column, drop=False)
+        result = rbm(frame, self._features, self._windows,
+                     homogeneity=self._homogeneity, type_=feature_type)
+
+        # Rename id column to correspond to input before returning.
+        return result.rename(columns={'id': id_column})
 
     @classmethod
     def register_parser(cls, subparsers, name):
@@ -53,6 +61,7 @@ class RbmAnnotator(Annotator):
         # Optional arguments.
         parser.add_argument('--feature_type', default='gene', choices=['gene', 'transcript'])
         parser.add_argument('--homogeneity', default=None, type=float)
+        parser.add_argument('--id_column', default='id')
 
         return parser
 
@@ -94,7 +103,7 @@ def _rbm_row(row, features, windows, type_):
     # Summarize hits.
     hits = pd.concat([hits, gff.expand_ensembl_attrs(hits['attribute'])], axis=1)
 
-    hit_rows = [{'id': row.id,
+    hit_rows = [{'id': row.name,
                  'gene_id': hit.gene_id,
                  'type': _hit_type(row, hit),
                  'orientation': _hit_orientation(row, hit)}
