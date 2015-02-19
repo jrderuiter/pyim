@@ -28,8 +28,11 @@ class PandasDfWrapper(object):
         else:
             return attr
 
-    def __getitem__(self, *args, **kwargs):
-        return self._frame.__getitem__(*args, **kwargs)
+    def __getitem__(self, item):
+        return self._frame[item]
+
+    def __setitem__(self, key, value):
+        self._frame[key] = value
 
     def __iter__(self):
         return iter(self._frame)
