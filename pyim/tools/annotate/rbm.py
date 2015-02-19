@@ -1,8 +1,7 @@
 __author__ = 'Julian'
 
 import pandas as pd
-
-from pyim_common.io import gff
+from tkgeno.io import EnsemblGtfFile
 
 from .base import Annotator
 
@@ -27,7 +26,7 @@ class RbmAnnotator(Annotator):
         if preset is not None:
             windows = WINDOW_PRESETS[preset]
 
-        self._features = gff.read(gtf_file)
+        self._features = EnsemblGtfFile.read(gtf_file)
         self._feature_type = feature_type
         self._windows = windows
         self._homogeneity = homogeneity
@@ -101,7 +100,7 @@ def _rbm_row(row, features, windows, type_):
     hits = pd.concat(hits, ignore_index=True).drop_duplicates()
 
     # Summarize hits.
-    hits = pd.concat([hits, gff.expand_ensembl_attrs(hits['attribute'])], axis=1)
+    hits.parse_attribute('gene_id')
 
     hit_rows = [{'id': row.name,
                  'gene_id': hit.gene_id,
@@ -118,7 +117,7 @@ def _rbm_row(row, features, windows, type_):
 def _search_features(cis, features, window_size, direction, orientation, feature_type):
     features = features.ix[features['feature'] == feature_type]
     window = _search_window(cis, window_size, direction, orientation)
-    return gff.find_overlap_frame(features, *window)
+    return features.get_region(*window)
 
 
 def _search_window(cis, window_size, direction='upstream', orientation='sense'):
