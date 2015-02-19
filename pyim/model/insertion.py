@@ -69,6 +69,22 @@ class InsertionFrame(PandasDfWrapper):
         if not inplace:
             return self.__class__(frame)
 
+    def annotate_by_gene(self, gene_map, reference_gff=None, inplace=None,
+                         ins_col='insertion_id', gene_col='gene_id'):
+        gene_map = gene_map.rename(columns=zip([ins_col, gene_col],
+                                               ['insertion_id', 'gene_id']))
+        gene_map = gene_map[['insertion_id', 'gene_id']].drop_duplicates()
+
+        merged = pd.merge(self._frame, gene_map, on='insertion_id')
+
+        if reference_gff is not None:
+            merged = self._annotate_gene(merged, reference_gff)
+
+        if inplace:
+            self._frame = merged
+        else:
+            return self.__class__(merged)
+
     def annotate_by_cis_gene(self, cis_map, cis_genes, reference_gff=None, inplace=False):
         # First, we create a lookup from insertion --> gene.
         ins_genes = pd.merge(cis_map, cis_genes, on='cis_id')
@@ -79,23 +95,29 @@ class InsertionFrame(PandasDfWrapper):
 
         # Finally, we annotate the gene hit type for each insertion.
         if reference_gff is not None:
-            # Subset reference to genes.
-            ref_genes = reference_gff.get_type('gene')
-            ref_genes.parse_attribute('gene_id')
-            ref_genes.set_index('gene_id', inplace=True)
-
-            types = []
-            for _, ins in merged.iterrows():
-                feature = ref_genes.ix[ins.gene_id]
-                types.append((_hit_type(ins, feature),
-                              _hit_orientation(ins, feature)))
-
-            merged['gene_type'], merged['gene_orientation'] = zip(*types)
+            merged = self._annotate_gene(merged, reference_gff)
 
         if inplace:
             self._frame = merged
         else:
             return self.__class__(merged)
+
+    @staticmethod
+    def _annotate_gene(frame, reference_gff):
+        # Subset reference to genes.
+        ref_genes = reference_gff.get_type('gene')
+        ref_genes.parse_attribute('gene_id')
+        ref_genes.set_index('gene_id', inplace=True)
+
+        types = []
+        for _, ins in frame.iterrows():
+            feature = ref_genes.ix[ins.gene_id]
+            types.append((_hit_type(ins, feature),
+                          _hit_orientation(ins, feature)))
+
+        frame['gene_type'], frame['gene_orientation'] = zip(*types)
+
+        return frame
 
     def merge_by_clustering(self, clusters, map_extra=None):
         merged = self._merge_by_clustering(self._frame, clusters, map_extra=map_extra)
