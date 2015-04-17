@@ -1,11 +1,12 @@
 __author__ = 'Julian'
 
-from numpy import sum as np_sum
+import numpy as np
+import pandas as pd
 from pysam import AlignmentFile
-from pyim_common.model.insertion import Insertion
 
-from .base import Pipeline
-from pyim.tools.align.util import alignment_frame
+from pyim.model.insertion import InsertionFrame
+
+from .base import Pipeline, group_alignments_by_position
 
 
 class LamPcrPipeline(Pipeline):
@@ -29,66 +30,50 @@ class LamPcrPipeline(Pipeline):
         return parser
 
     def run(self, input_path, output_path):
-        alignment_path = input_path
-
-        sam_file = AlignmentFile(alignment_path, 'rb')
-
-        alignments = (aln for aln in sam_file if aln.mapping_quality >= self.min_mapq)
-
-        # Map alignments to insertions and merge close-by insertions.
-        insertions = self.map_insertions_chunked(sam_file, alignments, self.map_insertions)
-        insertions = self.merge_insertions(insertions, self.merge_dist,
-                                           metadata_func=self._merge_metadata)
+        insertions = self._insertions_from_alignments(input_path, min_mapq=self.min_mapq)
 
         # Filter insertions with insufficient depth.
-        insertions = [ins for ins in insertions if ins.metadata['depth'] >= self.min_depth]
+        insertions = insertions.ix[insertions['depth_unique'] > self.min_depth]
 
-        # Name insertions with a unique id.
-        for i, ins in enumerate(insertions):
-            ins.name = 'INS_{}'.format(i+1)
+        # Sort insertions by position and tag with id.
+        insertions = insertions.sort(['seqname', 'location'])
+        insertions['insertion_id'] = ['INS_{}'.format(i) for i in range(insertions.shape[0])]
 
-        Insertion.to_file(insertions, output_path)
+        # Write insertions to disk.
+        insertions.to_file(output_path)
 
     @staticmethod
-    def map_insertions(sam_file, alignments):
-        frame = alignment_frame(sam_file, alignments)
+    def _insertions_from_alignments(bam_path, min_mapq=30, merge_dist=10, bc_map=None):
+        bam_file = AlignmentFile(bam_path, 'rb')
 
-        # Define our anchor field to group on.
-        is_fwd = frame['strand'] == 1
-        frame.ix[is_fwd, 'anchor'] = frame.ix[is_fwd, 'start']
-        frame.ix[~is_fwd, 'anchor'] = frame.ix[~is_fwd, 'end']
-
-        groups = frame.groupby(['seqname', 'anchor', 'strand'])
-
+        # Collect insertions from alignments.
         insertions = []
-        for i, (_, group) in enumerate(groups):
-            metadata = {
-                'depth': group.shape[0],
-                'depth_unique': group['anchor'].nunique(),
-                'avg_mapq': group['mapq'].mean()
-            }
+        for ref_id in bam_file.references:
+            print(ref_id)
+            alignments = bam_file.fetch(reference=ref_id)
+            alignments = (aln for aln in alignments if aln.mapping_quality >= min_mapq)
 
-            row = group.iloc[0]
-            ins = Insertion(None, row.seqname, row.anchor, row.strand, None, metadata=metadata)
+            aln_groups = group_alignments_by_position(alignments, barcode_map=bc_map)
+            for (pos, strand, bc), alns in aln_groups:
+                # Determine depth as the number of reads at this position.
+                depth = len(alns)
 
-            insertions.append(ins)
+                # Determine depth_unique by looking at differences in the
+                # other position (end for fwd strand, start for rev strand).
+                other_pos = (a.reference_end for a in alns) if strand == 1 else \
+                    (a.reference_start for a in alns)
+                other_pos = np.fromiter(other_pos, np.int, depth)
+                depth_unique = len(np.unique(other_pos))
+
+                insertions.append({'insertion_id': None, 'seqname': ref_id,
+                                   'location': pos, 'strand': strand, 'sample': bc,
+                                   'depth': depth, 'depth_unique': depth_unique})
+
+        insertions = InsertionFrame(pd.DataFrame(insertions))
+
+        # Merge insertions in close proximity.
+        if merge_dist > 0:
+            insertions = insertions.merge_by_location(
+                max_dist=merge_dist, map_extra=[('depth', np.sum), ('depth_unique', np.sum)])
 
         return insertions
-
-    @staticmethod
-    def merge_insertions(insertions, max_dist, metadata_func=None):
-        return Insertion.merge_by_location(insertions, max_dist=max_dist,
-                                           metadata_func=metadata_func)
-
-    @staticmethod
-    def _merge_metadata(ins_frame):
-        total_depth = ins_frame['depth'].sum()
-
-        avg_mapq = (ins_frame['depth'] / total_depth) * ins_frame['avg_mapq']
-        avg_mapq = np_sum(avg_mapq)
-
-        return {
-            'depth_unique': ins_frame['depth_unique'].sum(),
-            'depth': total_depth,
-            'avg_mapq': avg_mapq
-        }
