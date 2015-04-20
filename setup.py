@@ -4,18 +4,12 @@ import sys
 
 from setuptools import setup, find_packages
 
-install_requires = [
-    'numpy',
-    'scipy',
-    'pandas',
-    'pysam',
-    'natsort',
-    'rpy2'
-]
+install_requires = ['numpy', 'scipy', 'pandas', 'pysam',
+                    'natsort', 'rpy2']
 
 setup(
     name='pyim',
-    version='0.4.0',
+    version='0.4.1',
     url='',
     author='Julian de Ruiter',
     author_email='j.r.deruiter@icloud.com',
@@ -24,11 +18,11 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     entry_points={'console_scripts': [
-        'pyim-align = pyim.tools.align.main:main',
+        'pyim-align = pyim.main.align:main',
         'pyim-annotate = pyim.tools.annotate.main:main',
         'pyim-cis = pyim.tools.cis.main:main'
     ]},
-    extras_require={},
+    extras_require={'test': 'pytest'},
     zip_safe=True,
     classifiers=[],
     install_requires=install_requires

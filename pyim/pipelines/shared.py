@@ -1,53 +1,13 @@
-__author__ = 'Julian'
-
-import heapq
 from collections import defaultdict
 
+import numpy as np
+from scipy.spatial.distance import pdist
 
-class Pipeline(object):
-
-    REQUIRED_OPTIONS = []
-
-    def __init__(self, **kwargs):
-        super(Pipeline, self).__init__()
-
-    @classmethod
-    def configure_argparser(cls, parser):
-        return parser
-
-#    @staticmethod
-#    def map_insertions_chunked(sam_file, alignments, map_func):
-#        chunks = chunk_alignments(alignments)
-#        chunk_ins = [map_func(sam_file, c) for c in chunks]
-#        return flatten_list(chunk_ins)
-
-
-class PrioritySet(object):
-
-    def __init__(self):
-        self._heap = []
-        self._set = set()
-
-    def push(self, item, priority):
-        if item not in self._set:
-            heapq.heappush(self._heap, (priority, item))
-            self._set.add(item)
-
-    def pop(self):
-        priority, item = heapq.heappop(self._heap)
-        self._set.remove(item)
-        return item
-
-    def first(self):
-        _, item = min(self._heap)
-        return item
-
-    def __len__(self):
-        return len(self._heap)
+from pyim.util import PrioritySet
 
 
 def group_alignments_by_position(alignments, barcode_map=None):
-    grouped = _group_alignments_by_pos(alignments)
+    grouped = group_alignments_by_position(alignments)
 
     if barcode_map is None:
         for tup, grp in grouped:
@@ -58,7 +18,7 @@ def group_alignments_by_position(alignments, barcode_map=None):
                 yield tup + (bc, ), bc_grp
 
 
-def _group_alignments_by_pos(alignments):
+def _group_alignments_by_position(alignments):
     """ Groups alignments by their positions, grouping forward strand
         alignments with the same start position and reverse strand
         alignments with the same end position. Assumes alignments

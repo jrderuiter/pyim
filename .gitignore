@@ -3,3 +3,6 @@
 *.pyc
 /_old/
 pyim.egg-info
+htmlcov
+.coverage
+_legacy
