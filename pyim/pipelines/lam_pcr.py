@@ -5,8 +5,8 @@ import pandas as pd
 import pysam
 
 from pyim.alignment.genome import Bowtie2Aligner
+from pyim.cluster import cluster_frame_merged
 from pyim.io import read_fasta
-from pyim.util import cluster_frame_merged
 
 from .base import (Pipeline, BasicGenomicExtractor,
                    InsertionIdentifier, genomic_distance)
@@ -104,7 +104,7 @@ class LamPcrIdentifier(InsertionIdentifier):
                 linkage='complete', criterion='distance',
                 t=self._merge_distance)
 
-        return insertions
+        return insertions.sort(['seqname', 'location'])
 
     @classmethod
     def _merge_insertions(cls, frame):
@@ -112,7 +112,7 @@ class LamPcrIdentifier(InsertionIdentifier):
         return pd.Series(
             {'insertion_id': np.nan,
              'seqname': ref['seqname'],
-             'location': frame['location'].mean(),
+             'location': int(frame['location'].mean()),
              'strand': ref['strand'],
              'sample': ref['sample'],
              'depth': ref['depth'].sum(),

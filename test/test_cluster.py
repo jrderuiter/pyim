@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 
 from pyim.pipelines.base import genomic_distance
-from pyim.util import cluster_frame, cluster_frame_merged
+from pyim.cluster import cluster_frame, cluster_frame_merged
 
 
 @pytest.fixture(scope='module')

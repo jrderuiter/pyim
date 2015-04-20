@@ -142,12 +142,20 @@ def test_data_unordered():
         AlignedSegment('READ3', 0, 20, 69, True),
     ]
 
+@pytest.fixture(scope='module')
+def test_data_first_reverse():
+    return [
+        AlignedSegment('READ1', 0, 5, 21, True),
+        AlignedSegment('READ2', 0, 20, 69, False),
+        AlignedSegment('READ3', 0, 22, 69, False),
+    ]
+
 
 # noinspection PyShadowingNames
 # noinspection PyMethodMayBeStatic
-class TestInsertionIdentifier(object):
+class TestInsertionIdentifierGroupByPosition(object):
 
-    def test_group_alignments_by_position(self, test_data):
+    def test_simple(self, test_data):
         alignments, _ = test_data
 
         identifier = InsertionIdentifier()
@@ -163,7 +171,7 @@ class TestInsertionIdentifier(object):
         assert np.isnan(bc)
         assert len(alignments) == 4
 
-    def test_group_alignments_by_position_bc(self, test_data):
+    def test_with_barcode(self, test_data):
         alignments, bc_map = test_data
 
         identifier = InsertionIdentifier()
@@ -186,7 +194,7 @@ class TestInsertionIdentifier(object):
             else:
                 assert len(alignments) == 1
 
-    def test_group_alignments_by_position_stranded(self, test_data_stranded):
+    def test_stranded(self, test_data_stranded):
         alignments = test_data_stranded
 
         identifier = InsertionIdentifier()
@@ -213,7 +221,18 @@ class TestInsertionIdentifier(object):
         assert strand == -1
         assert len(alignments) == 2
 
-    def test_group_alignments_by_position_unordered(self, test_data_unordered):
+    def test_unordered(self, test_data_unordered):
         with pytest.raises(ValueError):
             identifier = InsertionIdentifier()
             list(identifier._group_alignments_by_position(test_data_unordered))
+
+    def test_first_reverse(self, test_data_first_reverse):
+        alignments = test_data_first_reverse
+
+        identifier = InsertionIdentifier()
+        groups = list(identifier._group_alignments_by_position(alignments))
+
+        # Should have been returned in increasing order, even though
+        # the -1 cluster occurs earlier in the alignments.
+        positions = [grp[0][0] for grp in groups]
+        assert all(np.diff(positions) >= 0)

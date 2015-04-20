@@ -27,12 +27,13 @@ class AlignmentFile(object):
 
 @pytest.fixture()
 def patch_alignment_file(monkeypatch):
-    alignments = {0: [
-        AlignedSegment('READ1', 0, 20, 70, False, 40),
-        AlignedSegment('READ2', 0, 20, 70, False, 40),
-        AlignedSegment('READ3', 0, 20, 69, False, 40),
-        AlignedSegment('READ4', 0, 20, 68, False, 40),
-        AlignedSegment('READ5', 0, 21, 68, False, 40)
+    alignments = {'1': [
+        AlignedSegment('READ0', '1', 1, 21, True, 40),    # 1st group on -1.
+        AlignedSegment('READ1', '1', 20, 70, False, 40),  # Start of 2nd group.
+        AlignedSegment('READ2', '1', 20, 70, False, 40),
+        AlignedSegment('READ3', '1', 20, 69, False, 40),
+        AlignedSegment('READ5', '1', 21, 68, False, 40),  # Within merge dist.
+        AlignedSegment('READ6', '1', 32, 68, False, 30)   # Outside merge dist.
     ]}
 
     # Monkeypatch mock class for fixture.
@@ -49,5 +50,28 @@ def patch_alignment_file(monkeypatch):
 class TestLamPcrIdentifier(object):
 
     def test_identify(self, patch_alignment_file):
-        identifier = LamPcrIdentifier(merge_distance=10)
-        #print(list(identifier.identify('alignment.bam')))
+        identifier = LamPcrIdentifier(merge_distance=10, min_mapq=0)
+        insertions = identifier.identify('dummy.bam')
+
+        assert len(insertions) == 3
+
+    def test_identify_mapq(self, patch_alignment_file):
+        identifier = LamPcrIdentifier(merge_distance=10, min_mapq=37)
+        insertions = identifier.identify('dummy.bam')
+
+        # Should find two insertions, due to lower mapq of READ6.
+        assert len(insertions) == 2
+
+    def test_identify_large_merge(self, patch_alignment_file):
+        identifier = LamPcrIdentifier(merge_distance=20, min_mapq=0)
+        insertions = identifier.identify('dummy.bam')
+
+        # Should find two insertions, due to larger merge_dist.
+        assert len(insertions) == 2
+
+    def test_identify_no_merge(self, patch_alignment_file):
+        identifier = LamPcrIdentifier(merge_distance=0, min_mapq=0)
+        insertions = identifier.identify('dummy.bam')
+
+        # Should find four insertions, due to no merge_dist.
+        assert len(insertions) == 4
