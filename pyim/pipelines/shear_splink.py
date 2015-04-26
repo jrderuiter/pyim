@@ -4,6 +4,7 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)
 
+from enum import Enum
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -35,6 +36,7 @@ class ShearSplinkPipeline(Pipeline):
 
         parser.add_argument('--contaminants', type=Path)
         parser.add_argument('--barcode_mapping', type=Path)
+        parser.add_argument('--min_genomic_length', type=int, default=15)
         parser.add_argument('--threads', type=int, default=1)
 
         return parser
@@ -72,6 +74,7 @@ class ShearSplinkPipeline(Pipeline):
             linker_sequence=linker_seq,
             linker_aligner=ExactAligner(try_reverse=False),
             contaminant_sequences=contaminant_seqs,
+            min_length=args['min_genomic_length'],
             threads=args['threads'])
 
         aligner = Bowtie2Aligner(args['reference'], bam_output=True)
@@ -80,13 +83,26 @@ class ShearSplinkPipeline(Pipeline):
         return cls(extractor=extractor, aligner=aligner, identifier=identifier)
 
 
+class ShearSplinkStatus(Enum):
+    contaminant = 1
+    no_transposon = 2
+    no_linker = 3
+    no_barcode = 4
+    too_short = 5
+    success = 6
+
+
 class ShearSplinkExtractor(GenomicExtractor):
+
+    STATUS = ShearSplinkStatus
 
     def __init__(self, transposon_sequence, barcode_sequences, linker_sequence,
                  contaminant_sequences=None, transposon_aligner=None,
                  barcode_aligner=None, linker_aligner=None, barcode_map=None,
-                 threads=1, chunk_size=1000):
-        super().__init__(threads=threads, chunk_size=chunk_size)
+                 min_length=1, threads=1, chunk_size=1000):
+        super().__init__(min_length=min_length,
+                         threads=threads,
+                         chunk_size=chunk_size)
 
         # Sequences.
         self._transposon = transposon_sequence
@@ -117,7 +133,7 @@ class ShearSplinkExtractor(GenomicExtractor):
                 align_multiple(self._contaminants, read, how='any')
 
             if contaminant_aln is not None:
-                return None
+                return None, self.STATUS.contaminant
 
         # Check for transposon sequence.
         transposon_aln = self._transposon_aligner.align(
@@ -125,7 +141,7 @@ class ShearSplinkExtractor(GenomicExtractor):
 
         if transposon_aln is None:
             # Missing transposon sequence.
-            return None
+            return None, self.STATUS.no_transposon
         else:
             # If we have a transposon sequence, continue.
             if transposon_aln.target_strand == -1:
@@ -140,19 +156,23 @@ class ShearSplinkExtractor(GenomicExtractor):
 
             if linker_aln is None:
                 # Missing linker sequence.
-                return None
+                return None, self.STATUS.no_linker
             else:
                 barcode_aln = self._barcode_aligner.\
                     align_multiple(self._barcodes, read)
 
                 if barcode_aln is None:
                     # Missing barcode sequence.
-                    return None
+                    return None, self.STATUS.no_barcode
                 else:
                     # Read is complete, return genomic part and barcode.
                     genomic = read[transposon_aln.target_end:
                                    linker_aln.target_start]
-                    return genomic, barcode_aln.query_id
+                    if len(genomic) < self._min_length:
+                        return None, self.STATUS.too_short
+                    else:
+                        return ((genomic, barcode_aln.query_id),
+                                self.STATUS.success)
 
     @classmethod
     def _read_input(cls, file_path, format_=None):

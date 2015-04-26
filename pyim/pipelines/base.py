@@ -60,6 +60,17 @@ class Pipeline(object):
             _, barcodes = self._extractor.extract_file(
                 input_path=input_path, output_path=genomic_path)
 
+            # Log statistics.
+            total_reads = sum(self._extractor.stats.values())
+
+            logger.info('- Processed {} reads'.format(total_reads))
+            logger.info('- Read statistics')
+            for status in self._extractor.STATUS:
+                count = self._extractor.stats[status]
+                logger.info('\t- {}: {} ({:3.2f}%)'
+                            .format(status.name, count,
+                                    (count / total_reads) * 100))
+
             # Write out barcodes as frame.
             barcode_frame = pd.DataFrame.from_records(
                 iter(barcodes.items()), columns=['read_id', 'barcode'])
@@ -86,41 +97,35 @@ class Pipeline(object):
 
         logger.info('Done!')
 
-    @classmethod
-    def _file_class(cls, file_path):
-        return FastaFile if cls._file_type(file_path) == 'fasta' else FastqFile
-
-    @staticmethod
-    def _file_type(file_path):
-        suffixes = file_path.suffixes
-        if '.fastq' in suffixes or '.fq' in suffixes:
-            return 'fastq'
-        elif '.fa' in suffixes or '.fna' in suffixes:
-            return 'fasta'
-        else:
-            raise ValueError('Unknown file type {}'.format(file_path.name))
-
 
 class GenomicExtractor(object):
 
-    def __init__(self, threads=1, chunk_size=1000, **kwargs):
+    def __init__(self, min_length=1, threads=1, chunk_size=1000, **kwargs):
         super().__init__()
+        self._min_length = min_length
         self._threads = threads
         self._chunk_size = chunk_size
+        self._stats = defaultdict(int)
+
+    @property
+    def stats(self):
+        return self._stats
 
     def extract(self, reads):
         if self._threads == 1:
             for read in reads:
-                tup = self.extract_read(read)  # Genomic, barcode tuple.
-                if tup is not None:
-                    yield tup
+                result, status = self.extract_read(read)
+                self._stats[status] += 1
+                if result is not None:
+                    yield result
         else:
             pool = Pool(self._threads)
 
-            for tup in pool.imap_unordered(self.extract_read, reads,
-                                           chunksize=self._chunk_size):
-                if tup is not None:
-                    yield tup
+            for result, status in pool.imap_unordered(
+                    self.extract_read, reads, chunksize=self._chunk_size):
+                self._stats[status] += 1
+                if result is not None:
+                    yield result
 
             pool.close()
             pool.join()
@@ -146,23 +151,20 @@ class GenomicExtractor(object):
         for genomic, barcode in self.extract(reads):
                 yield genomic, barcode
 
-    def extract_to_file(self, reads, file_path,
-                        min_length=15, format_=None):
+    def extract_to_file(self, reads, file_path, format_=None):
         barcodes = {}
 
         with self._open_out(file_path, format_=format_) as file_:
             for genomic, barcode in self.extract(reads):
-                if len(genomic) >= min_length:
-                    barcodes[genomic.id] = barcode
-                    self._write_out(genomic, file_, format_=format_)
+                barcodes[genomic.id] = barcode
+                self._write_out(genomic, file_, format_=format_)
 
         return file_path, barcodes
 
-    def extract_file(self, input_path, output_path, min_length=15,
+    def extract_file(self, input_path, output_path,
                      in_format=None, out_format=None):
         reads = self._read_input(input_path, format_=in_format)
-        return self.extract_to_file(reads, output_path, format_=out_format,
-                                    min_length=min_length)
+        return self.extract_to_file(reads, output_path, format_=out_format)
 
 
 class InsertionIdentifier(object):
