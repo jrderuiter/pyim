@@ -7,9 +7,11 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 import argparse
 
 from pyim.pipelines.lam_pcr import LamPcrPipeline
+from pyim.pipelines.shear_splink import ShearSplinkPipeline
 
 PIPELINES = {
-    'lam_pcr': LamPcrPipeline
+    'lam_pcr': LamPcrPipeline,
+    'shear_splink': ShearSplinkPipeline
 }
 
 
@@ -47,7 +49,7 @@ def main():
     except KeyError:
         raise ValueError('Pipeline \'{}\' does not exist'.format(pipeline_name))
     else:
-        pipeline = pipeline_class.from_args(**arg_dict)
+        pipeline = pipeline_class.from_args(arg_dict)
         pipeline.run(input_path, output_path)
 
 

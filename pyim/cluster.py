@@ -26,13 +26,14 @@ def cluster_frame(frame, dist_func, groupby=None,
     if groupby is None:
         groups = [(None, frame)]
     else:
+        # Replace NaNs to avoid dropping entries.
         frame = frame.fillna('NaN')
         groups = frame.groupby(groupby)
 
     # Determine clusters and use to sub-group frame.
     for _, grp in groups:
         if len(grp) == 1:
-            yield grp
+            yield grp.replace('NaN', np.nan)
         else:
             dists = dist_func(grp)
             clusters = fcluster(complete(dists), t=t, criterion=criterion)
@@ -45,8 +46,11 @@ def cluster_frame(frame, dist_func, groupby=None,
 def cluster_frame_merged(frame, dist_func, merge_func, **kwargs):
     # Otherwise we merge each group into a single row (series)
     # and return the summarized dataframe.
-    groups = cluster_frame(frame, dist_func, **kwargs)
+    groups = list(cluster_frame(frame, dist_func, **kwargs))
 
-    return pd.DataFrame.from_records(
+    frame = pd.DataFrame.from_records(
         (merge_func(grp) for grp in groups),
         columns=frame.columns)
+
+    return frame
+

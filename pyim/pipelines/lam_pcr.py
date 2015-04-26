@@ -9,37 +9,35 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pysam
+from skbio import DNASequence, SequenceCollection
 
 from pyim.alignment.genome import Bowtie2Aligner
 from pyim.cluster import cluster_frame_merged
-from pyim.io import read_fasta
 
-from .base import (Pipeline, BasicGenomicExtractor,
+from .base import (Pipeline, GenomicExtractor,
                    InsertionIdentifier, genomic_distance)
 
 
 class LamPcrPipeline(Pipeline):
 
     @classmethod
-    def configure_argparser(cls, subparsers, name='lam_pcr'):
-        parser = subparsers.add_parser('lam_pcr', help='lam_pcr help')
+    def configure_argparser(cls, subparsers, name='lampcr'):
+        parser = subparsers.add_parser(name, help=name + ' help')
 
         parser.add_argument('transposon_sequence', type=Path)
 
         parser.add_argument('--barcode_sequences', type=Path)
         parser.add_argument('--barcode_mapping', type=Path)
-        parser.add_argument('--linker_sequence', type=Path)
 
         return parser
 
     @classmethod
     def from_args(cls, args):
-        transposon_seq = next(read_fasta(args['transposon_sequence']))
+        transposon_seq = DNASequence.read(str(args['transposon_sequence']))
 
-        # Read barcode and linker sequences if supplied.
-        linker_seq = next(read_fasta(args['linker_sequence'])) \
-            if args['linker_sequence'] is not None else None
-        barcode_seqs = list(read_fasta(args['barcode_sequences'])) \
+        # Read barcode sequences if supplied.
+        barcode_seqs = SequenceCollection.read(
+            str(args['barcode_sequences']), constructor=DNASequence) \
             if args['barcode_sequences'] is not None else None
 
         # Read barcode map if supplied.
@@ -51,13 +49,17 @@ class LamPcrPipeline(Pipeline):
             barcode_map = None
 
         # Setup extractor and identifier for pipeline.
-        extractor = BasicGenomicExtractor(
-            transposon_seq, barcode_seqs, barcode_map, linker_seq)
+        extractor = LamPcrExtractor(
+            transposon_seq, barcode_seqs, barcode_map)
         identifier = LamPcrIdentifier()
 
         return cls(extractor=extractor,
                    aligner=Bowtie2Aligner,
                    identifier=identifier)
+
+
+class LamPcrExtractor(GenomicExtractor):
+    pass
 
 
 class LamPcrIdentifier(InsertionIdentifier):

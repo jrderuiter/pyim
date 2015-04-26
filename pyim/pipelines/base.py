@@ -3,15 +3,25 @@ from __future__ import (absolute_import, division,
 from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)
+from future.utils import native_str
 
+import logging
+from contextlib import contextmanager
 from collections import defaultdict
+from enum import Enum
+from multiprocessing import Pool
 
+import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist
-from tkgeno.io import FastqFile
+from tkgeno.io import FastqFile, FastaFile
 
-from pyim.alignment.vector.align import align_exact, align_multiple
 from pyim.util import PrioritySet
+
+logging.basicConfig(
+    format='%(asctime)-15s %(message)s',
+    datefmt='[%Y-%m-%d %H:%M:%S]',
+    level=logging.INFO)
 
 
 class Pipeline(object):
@@ -30,111 +40,129 @@ class Pipeline(object):
     def from_args(cls, args):
         raise NotImplementedError()
 
-    def run(self, input_path, output_path, work_dir):
+    def run(self, input_path, output_path):
+        logger = logging.getLogger()
+
+        logger.info('Starting {} pipeline'.format(
+            self.__class__.__name__.replace('Pipeline', '')))
+
+        # Create directories if needed.
+        if not output_path.exists():
+            output_path.mkdir()
+
         if input_path.suffix not in {'.bam', '.sam'}:
-            # Assume Fastq for now.
-            with FastqFile.open(input_path) as file_:
-                # Extract genomic reads.
-                genomic_path = work_dir / 'genomic.fastq.gz'
-                self._extractor.extract_to_file(iter(file_), genomic_path)
+            genomic_path = output_path / ('genomic' + input_path.suffix)
+            barcode_path = output_path / 'genomic.barcodes.txt'
+
+            # Extract genomic reads from input.
+            logger.info('Extracting genomic sequences from reads')
+
+            _, barcodes = self._extractor.extract_file(
+                input_path=input_path, output_path=genomic_path)
+
+            # Write out barcodes as frame.
+            barcode_frame = pd.DataFrame.from_records(
+                iter(barcodes.items()), columns=['read_id', 'barcode'])
+            barcode_frame.to_csv(
+                str(barcode_path), sep=native_str('\t'), index=False)
 
             # Align to reference genome.
+            logger.info('Aligning genomic sequences to reference')
+            logger.info('- Using {} aligner (v{})'.format(
+                self._aligner.__class__.__name__.replace('Aligner', ''),
+                self._aligner.get_version()))
+
             aln_path = self._aligner.align_file(
-                genomic_path, output_dir=work_dir)
+                file=genomic_path, output_dir=output_path)
         else:
             aln_path = input_path
 
         # Identify transposon insertions.
+        logger.info('Identifying insertions from alignment')
+
         insertions = self._identifier.identify(aln_path)
-        insertions.to_csv(output_path, sep='\t')
+        insertions.to_csv(str(output_path / 'insertions.txt'),
+                          sep=native_str('\t'), index=False)
+
+        logger.info('Done!')
+
+    @classmethod
+    def _file_class(cls, file_path):
+        return FastaFile if cls._file_type(file_path) == 'fasta' else FastqFile
+
+    @staticmethod
+    def _file_type(file_path):
+        suffixes = file_path.suffixes
+        if '.fastq' in suffixes or '.fq' in suffixes:
+            return 'fastq'
+        elif '.fa' in suffixes or '.fna' in suffixes:
+            return 'fasta'
+        else:
+            raise ValueError('Unknown file type {}'.format(file_path.name))
 
 
 class GenomicExtractor(object):
 
-    def __init__(self, **kwargs):
+    def __init__(self, threads=1, chunk_size=1000, **kwargs):
         super().__init__()
+        self._threads = threads
+        self._chunk_size = chunk_size
 
     def extract(self, reads):
+        if self._threads == 1:
+            for read in reads:
+                tup = self.extract_read(read)  # Genomic, barcode tuple.
+                if tup is not None:
+                    yield tup
+        else:
+            pool = Pool(self._threads)
+
+            for tup in pool.imap_unordered(self.extract_read, reads,
+                                           chunksize=self._chunk_size):
+                if tup is not None:
+                    yield tup
+
+            pool.close()
+            pool.join()
+
+    def extract_read(self, read):
         raise NotImplementedError()
 
-    def extract_to_file(self, reads, file_path):
-        with FastqFile.open(file_path, mode='w') as file_:
-            barcodes = {}
+    @classmethod
+    def _read_input(cls, file_path, format_):
+        raise NotImplementedError()
+
+    @classmethod
+    @contextmanager
+    def _open_out(cls, file_path, format_):
+        raise NotImplementedError()
+
+    @classmethod
+    def _write_out(cls, sequence, fh, format_):
+        raise NotImplementedError()
+
+    def extract_from_file(self, file_path, format_=None):
+        reads = self._read_input(file_path, format_=format_)
+        for genomic, barcode in self.extract(reads):
+                yield genomic, barcode
+
+    def extract_to_file(self, reads, file_path,
+                        min_length=15, format_=None):
+        barcodes = {}
+
+        with self._open_out(file_path, format_=format_) as file_:
             for genomic, barcode in self.extract(reads):
-                barcodes[genomic.id] = barcode
-                FastqFile.write(file_, genomic)
+                if len(genomic) >= min_length:
+                    barcodes[genomic.id] = barcode
+                    self._write_out(genomic, file_, format_=format_)
 
+        return file_path, barcodes
 
-class BasicGenomicExtractor(GenomicExtractor):
-
-    def __init__(self, transposon_sequence, barcode_sequences=None,
-                 barcode_map=None, linker_sequence=None):
-        super().__init__()
-
-        self._transposon_sequence = transposon_sequence
-        self._barcodes = barcode_sequences
-        self._barcode_map = barcode_map
-        self._linker_sequence = linker_sequence
-
-    def extract(self, reads):
-        extract_func = self._dispatch()
-        for read in reads:
-            tup = self.extract_read(read, func=extract_func)
-            if tup is not None:
-                yield tup
-
-    def extract_read(self, read, func=None):
-        if func is None:
-            func = self._dispatch()
-
-        # Check for transposon sequence.
-        transposon_aln = align_exact(self._transposon_sequence, read)
-
-        # If we have a transposon sequence, try dispatching.
-        if transposon_aln is not None:
-            return func(read, transposon_aln)
-        else:
-            return None
-
-    def _dispatch(self):
-        has_barcodes = self._barcodes is not None
-        has_linker = self._linker_sequence is not None
-
-        if has_barcodes:
-            return self._with_barcode_with_linker if has_linker \
-                else self._with_barcode_no_linker
-        else:
-            return self._no_barcode_with_linker if has_linker \
-                else self._no_barcode_no_linker
-
-    def _with_barcode_with_linker(self, read, transposon_aln):
-        # TODO: account for strand in extraction?
-        # Match barcode and linker.
-        barcode_aln = align_multiple(self._barcodes, read, align_exact)
-        linker_aln = align_exact(self._linker_sequence, read)
-
-        # Extract genomic sequence.
-        if barcode_aln is not None and linker_aln is not None:
-            genomic = read[barcode_aln.target_end:linker_aln.target_start]
-            return genomic, barcode_aln.query_id
-        else:
-            return None
-
-    def _with_barcode_no_linker(self, read, transposon_aln):
-        barcode_aln = align_multiple(self._barcodes, read, align_exact)
-
-        if barcode_aln is not None:
-            genomic = read[barcode_aln.target_end:]
-            return genomic, barcode_aln.query_id
-        else:
-            return None
-
-    def _no_barcode_with_linker(self, read, transposon_aln):
-        raise NotImplementedError()
-
-    # noinspection PyMethodMayBeStatic
-    def _no_barcode_no_linker(self, read, transposon_aln):
-        return read[transposon_aln.target_end:], None
+    def extract_file(self, input_path, output_path, min_length=15,
+                     in_format=None, out_format=None):
+        reads = self._read_input(input_path, format_=in_format)
+        return self.extract_to_file(reads, output_path, format_=out_format,
+                                    min_length=min_length)
 
 
 class InsertionIdentifier(object):

@@ -11,96 +11,11 @@ import pytest
 import numpy as np
 from skbio import DNASequence
 
-from pyim.pipelines.base import BasicGenomicExtractor, InsertionIdentifier
+from pyim.alignment.vector import ExactAligner
+from pyim.pipelines.base import InsertionIdentifier
 
 
-# -------- Extractor tests -------
-
-@pytest.fixture(scope='module')
-def reads():
-    return [
-        DNASequence('ACTGAAATGCGTCTGCCCC'),  # BC01, linker
-        DNASequence('ACTGAAAAGCGTCTGCCCC'),  # BC02, linker
-        DNASequence('ACTGAAATGCGTCTG'),      # BC01, no linker
-        DNASequence('ACTGGCGTCTG')       # No bc, no linker
-    ]
-
-
-@pytest.fixture(scope='module')
-def transposon_seq():
-    return DNASequence('ACTG', id='transposon')
-
-
-@pytest.fixture(scope='module')
-def barcode_seqs():
-    return [DNASequence('AAAT', 'BC01'),
-            DNASequence('AAAA', 'BC02')]
-
-
-@pytest.fixture(scope='module')
-def linker_seq():
-    return DNASequence('CCCC', id='linker')
-
-
-# noinspection PyShadowingNames
-# noinspection PyMethodMayBeStatic
-class TestBasicGenomicExtractor(object):
-
-    def test_exact(self, reads, transposon_seq, barcode_seqs, linker_seq):
-        extractor = BasicGenomicExtractor(
-            transposon_seq, barcode_seqs,
-            barcode_map=None, linker_sequence=linker_seq)
-
-        genomic, barcode = extractor.extract_read(reads[0])
-        assert genomic.sequence == 'GCGTCTG'
-        assert barcode == 'BC01'
-
-        genomic, barcode = extractor.extract_read(reads[1])
-        assert genomic.sequence == 'GCGTCTG'
-        assert barcode == 'BC02'
-
-    def test_exact_no_linker(self, reads, transposon_seq, barcode_seqs):
-        # Instance without linker sequence, should extract.
-        extractor = BasicGenomicExtractor(
-            transposon_seq, barcode_seqs,
-            barcode_map=None, linker_sequence=None)
-
-        genomic, barcode = extractor.extract_read(reads[2])
-        assert genomic.sequence == 'GCGTCTG'
-        assert barcode == 'BC01'
-
-    def test_exact_no_linker_neg(self, reads, transposon_seq,
-                                 barcode_seqs, linker_seq):
-        # Instance with linker sequence, should return None.
-        extractor = BasicGenomicExtractor(
-            transposon_seq, barcode_seqs,
-            barcode_map=None, linker_sequence=linker_seq)
-
-        res = extractor.extract_read(reads[2])
-        assert res is None
-
-    def test_exact_no_barcode_or_linker(self, reads, transposon_seq):
-        # Instance without sequences, should extract genomic.
-        extractor = BasicGenomicExtractor(
-            transposon_seq, barcode_sequences=None,
-            barcode_map=None, linker_sequence=None)
-
-        genomic, barcode = extractor.extract_read(reads[3])
-        assert genomic.sequence == 'GCGTCTG'
-        assert barcode is None
-
-    def test_exact_no_barcode_or_linker_neg(self, reads, transposon_seq,
-                                            barcode_seqs, linker_seq):
-        # Instance with barcodes and linker sequence, should return None.
-        extractor = BasicGenomicExtractor(
-            transposon_seq, barcode_sequences=barcode_seqs,
-            barcode_map=None, linker_sequence=linker_seq)
-
-        res = extractor.extract_read(reads[3])
-        assert res is None
-
-
-# -------- Identifier tests -------
+# -------- Base identifier tests -------
 
 AlignedSegment = namedtuple(
     'AlignedSegment',
