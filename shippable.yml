@@ -1,0 +1,53 @@
+language: python
+
+python:
+    - '2.7'
+    - '3.4'
+
+before_install:
+    # Get the Python version setup by shippable (for use in our env later).
+    - export CONDA_PYTHON_VERSION=$(python -c 'import sys; print("{0}.{1}".format(*sys.version_info))')
+
+    # Install and setup miniconda.
+    - wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    - bash Miniconda3-latest-Linux-x86_64.sh -b
+    - export PATH=/home/shippable/miniconda3/bin:$PATH
+
+    # Create and activate environment.
+    - conda create -y -n env python=$CONDA_PYTHON_VERSION pip
+    - source activate env
+
+    # Install any system dependencies.
+    - sudo apt-get update
+    - sudo apt-get install -y tabix
+    - sudo apt-get install -y --no-install-recommends r-base
+
+    # Install Python package dependencies.
+    - conda install -y numpy scipy pandas natsort scikit-bio
+    - conda install -y -c https://conda.binstar.org/jrderuiter pysam
+    - pip install rpy2
+
+    # Install tkgeno dependency + required packages.
+    - conda install -y matplotlib statsmodels
+    - pip install git+ssh://git@bitbucket.org/jrderuiter/genomics-toolkit.git
+
+    # Install packages required for tests.
+    - conda install -y -c https://conda.binstar.org/jrderuiter pytest pytest-cov
+
+install:
+    - python setup.py install
+
+before_script:
+    - mkdir -p shippable/testresults shippable/codecoverage
+
+script:
+    - py.test --cov pyim --cov-report xml --junit-xml=shippable/testresults/results.xml
+
+notifications:
+    email:
+        recipients:
+            - jrderuiter@fastmail.fm
+
+branches:
+    only:
+        - shippable

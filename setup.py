@@ -5,7 +5,10 @@ import sys
 from setuptools import setup, find_packages
 
 install_requires = ['numpy', 'scipy', 'pandas', 'pysam',
-                    'natsort', 'rpy2']
+                    'natsort', 'rpy2', 'scikit-bio', 'tkgeno']
+
+if sys.version_info[0] == 2:
+    install_requires += ['pathlib']
 
 setup(
     name='pyim',
