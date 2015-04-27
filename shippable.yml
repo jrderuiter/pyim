@@ -50,4 +50,4 @@ notifications:
 
 branches:
     only:
-        - shippable
+        - refactoring
