@@ -8,7 +8,7 @@ install_requires = ['future', 'numpy', 'scipy', 'pandas', 'pysam',
                     'natsort', 'rpy2', 'scikit-bio', 'tkgeno']
 
 if sys.version_info[0] == 2:
-    install_requires += ['pathlib']
+    install_requires += ['pathlib', 'enum']
 
 setup(
     name='pyim',

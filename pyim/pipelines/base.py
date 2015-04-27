@@ -8,13 +8,11 @@ from future.utils import native_str
 import logging
 from contextlib import contextmanager
 from collections import defaultdict
-from enum import Enum
 from multiprocessing import Pool
 
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist
-from tkgeno.io import FastqFile, FastaFile
 
 from pyim.util import PrioritySet
 
