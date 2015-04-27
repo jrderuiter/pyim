@@ -86,12 +86,12 @@ class Pipeline(object):
             aln_path = self._aligner.align_file(
                 file=genomic_path, output_dir=output_path)
         else:
-            aln_path = input_path
+            aln_path, barcodes = input_path, None
 
         # Identify transposon insertions.
         logger.info('Identifying insertions from alignment')
 
-        insertions = self._identifier.identify(aln_path)
+        insertions = self._identifier.identify(aln_path, sample_map=barcodes)
         insertions.to_csv(str(output_path / 'insertions.txt'),
                           sep=native_str('\t'), index=False)
 

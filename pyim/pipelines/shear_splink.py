@@ -3,6 +3,7 @@ from __future__ import (absolute_import, division,
 from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)
+from future.utils import native_str
 
 from enum import Enum
 from contextlib import contextmanager
@@ -37,6 +38,9 @@ class ShearSplinkPipeline(Pipeline):
         parser.add_argument('--contaminants', type=Path)
         parser.add_argument('--barcode_mapping', type=Path)
         parser.add_argument('--min_genomic_length', type=int, default=15)
+        parser.add_argument('--min_depth', type=int, default=2)
+        parser.add_argument('--min_mapq', type=int, default=37)
+
         parser.add_argument('--threads', type=int, default=1)
 
         return parser
@@ -58,7 +62,8 @@ class ShearSplinkPipeline(Pipeline):
 
         # Read barcode map if supplied.
         if barcode_seqs is not None and args['barcode_mapping'] is not None:
-            barcode_map = pd.read_csv(args['barcode_mapping'], sep='\t')
+            barcode_map = pd.read_csv(str(args['barcode_mapping']),
+                                      sep=native_str('\t'))
             barcode_map = dict(zip(barcode_map['barcode'],
                                    barcode_map['sample']))
         else:
@@ -78,7 +83,8 @@ class ShearSplinkPipeline(Pipeline):
             threads=args['threads'])
 
         aligner = Bowtie2Aligner(args['reference'], bam_output=True)
-        identifier = ShearSplinkIdentifier(min_mapq=0)
+        identifier = ShearSplinkIdentifier(
+            min_mapq=args['min_mapq'], min_depth=args['min_depth'])
 
         return cls(extractor=extractor, aligner=aligner, identifier=identifier)
 
@@ -89,7 +95,7 @@ class ShearSplinkStatus(Enum):
     no_linker = 3
     no_barcode = 4
     too_short = 5
-    success = 6
+    proper_read = 6
 
 
 class ShearSplinkExtractor(GenomicExtractor):
@@ -171,8 +177,13 @@ class ShearSplinkExtractor(GenomicExtractor):
                     if len(genomic) < self._min_length:
                         return None, self.STATUS.too_short
                     else:
-                        return ((genomic, barcode_aln.query_id),
-                                self.STATUS.success)
+                        barcode = barcode_aln.query_id
+
+                        if self._barcode_map is not None:
+                            barcode = self._barcode_map[barcode]
+
+                        return ((genomic, barcode),
+                                self.STATUS.proper_read)
 
     @classmethod
     def _read_input(cls, file_path, format_=None):
@@ -195,9 +206,10 @@ class ShearSplinkExtractor(GenomicExtractor):
 
 class ShearSplinkIdentifier(InsertionIdentifier):
 
-    def __init__(self, min_mapq=37, merge_distance=10):
+    def __init__(self, min_depth=0, min_mapq=37, merge_distance=10):
         super().__init__()
 
+        self._min_depth = min_depth
         self._min_mapq = min_mapq
         self._merge_distance = merge_distance
 
@@ -243,7 +255,16 @@ class ShearSplinkIdentifier(InsertionIdentifier):
                 linkage='complete', criterion='distance',
                 t=self._merge_distance)
 
-        return insertions.sort(['seqname', 'location'])
+        # Filter by min_depth.
+        insertions = insertions.ix[insertions['depth_unique'] > self._min_depth]
+
+        # Sort by coordinate and add identifiers.
+        insertions = insertions.sort(['seqname', 'location'])
+
+        insertions['insertion_id'] = ['INS_{}'.format(i+1)
+                                      for i in range(len(insertions))]
+
+        return insertions
 
     @classmethod
     def _merge_insertions(cls, frame):
