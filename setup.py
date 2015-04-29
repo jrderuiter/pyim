@@ -12,7 +12,7 @@ if sys.version_info[0] == 2:
 
 setup(
     name='pyim',
-    version='0.4.1',
+    version='0.4.2',
     url='',
     author='Julian de Ruiter',
     author_email='j.r.deruiter@icloud.com',
@@ -22,7 +22,7 @@ setup(
     include_package_data=True,
     entry_points={'console_scripts': [
         'pyim-align = pyim.main.align:main',
-        'pyim-annotate = pyim.tools.annotate.main:main',
+        'pyim-annotate = pyim.main.annotate:main',
         'pyim-cis = pyim.tools.cis.main:main'
     ]},
     extras_require={'test': 'pytest'},

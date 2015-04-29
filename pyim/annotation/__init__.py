@@ -1,1 +1,1 @@
-__author__ = 'Julian'
+from .kcrbm import KcRbmAnnotator
