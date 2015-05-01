@@ -6,7 +6,44 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 
 from skbio.alignment import local_pairwise_align_ssw
 
-from .model import VectorAlignment
+
+class VectorAlignment(object):
+
+    def __init__(self, query_id, query_start, query_end, query_len,
+                 target_id, target_start, target_end, target_strand,
+                 target_len, type, identity, coverage):
+        self.query_id = query_id
+        self.query_start = query_start
+        self.query_end = query_end
+        self.query_len = query_len
+        self.target_id = target_id
+        self.target_start = target_start
+        self.target_end = target_end
+        self.target_strand = target_strand
+        self.target_len = target_len
+        self.type = type
+        self.identity = identity
+        self.coverage = coverage
+
+    @property
+    def score(self):
+        return self.identity * self.coverage
+
+    def reverse(self, read):
+        read_len = len(read)
+
+        return self.__class__(
+            query_id=self.query_id,
+            query_start=self.query_start,
+            query_end=self.query_end,
+            query_len=self.query_len,
+            target_id=self.target_id,
+            target_start=read_len - self.target_end,
+            target_end=read_len - self.target_start,
+            target_len=self.target_len,
+            target_strand=1 if self.target_strand == -1 else 1,
+            type=self.type, identity=self.identity, coverage=self.coverage
+        )
 
 
 class VectorAligner(object):
@@ -60,18 +97,21 @@ class ExactAligner(VectorAligner):
             return None
         else:
             q_len = len(query)
+
             return VectorAlignment(
                 query_id=query.id, query_start=0, query_end=q_len,
-                target_id=target.id, target_start=index,
+                query_len=q_len, target_id=target.id, target_start=index,
                 target_end=index + q_len, target_strand=query_ori,
-                type='exact', identity=1.0, coverage=1.0)
+                target_len=len(target), type='exact',
+                identity=1.0, coverage=1.0)
 
 
 class SswAligner(VectorAligner):
 
-    def __init__(self, try_reverse=False):
+    def __init__(self, try_reverse=False, filters=None):
         super().__init__()
         self._try_reverse = try_reverse
+        self._filters = filters
 
     def align(self, query, target):
         fwd_alignment = self._align_ssw(query, target, query_ori=1)
@@ -97,8 +137,7 @@ class SswAligner(VectorAligner):
 
         return alignment
 
-    @staticmethod
-    def _align_ssw(query, target, query_ori):
+    def _align_ssw(self, query, target, query_ori):
         ssw_aln = local_pairwise_align_ssw(target.sequence, query.sequence)
 
         # Extract positions.
@@ -115,11 +154,20 @@ class SswAligner(VectorAligner):
         coverage = (q_end - q_start) / float(len(query))
         identity = ssw_aln[0].fraction_same(ssw_aln[1])
 
-        return VectorAlignment(
+        aln = VectorAlignment(
             query_id=query.id, query_start=q_start, query_end=q_end,
-            target_id=target.id, target_start=t_start,
-            target_end=t_end, target_strand=query_ori,
+            query_len=len(query), target_id=target.id, target_start=t_start,
+            target_end=t_end, target_strand=query_ori, target_len=len(target),
             type='ssw', identity=identity, coverage=coverage)
+
+        # Check if alignment passes any filter.
+        if self._filters is None:
+            return aln
+        else:
+            for filter_ in self._filters:
+                if filter_(aln):
+                    return aln
+            return None
 
 
 class ChainedAligner(VectorAligner):
