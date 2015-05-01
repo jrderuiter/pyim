@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from collections import defaultdict
 from multiprocessing import Pool
 
+import pkg_resources
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist
@@ -40,6 +41,9 @@ class Pipeline(object):
 
     def run(self, input_path, output_path):
         logger = logging.getLogger()
+
+        version = pkg_resources.get_distribution("pyim").version
+        logger.info('--- PyIM v{} ---'.format(version))
 
         logger.info('Starting {} pipeline'.format(
             self.__class__.__name__.replace('Pipeline', '')))
@@ -93,7 +97,7 @@ class Pipeline(object):
         insertions.to_csv(str(output_path / 'insertions.txt'),
                           sep=native_str('\t'), index=False)
 
-        logger.info('Done!')
+        logger.info('--- Done! ---')
 
 
 class GenomicExtractor(object):
