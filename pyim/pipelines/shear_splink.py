@@ -6,6 +6,7 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 from future.utils import native_str
 
 from enum import Enum
+from functools import partial
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import pysam
 from skbio import io as skbio_io, DNASequence, SequenceCollection
 
 from pyim.alignment.genome import Bowtie2Aligner
-from pyim.alignment.vector import ExactAligner
+from pyim.alignment.vector import ExactAligner, SswAligner, ChainedAligner
 from pyim.cluster import cluster_frame_merged
 
 from .base import (Pipeline, GenomicExtractor,
@@ -69,24 +70,63 @@ class ShearSplinkPipeline(Pipeline):
         else:
             barcode_map = None
 
+        # Setup transposon aligner.
+
+        transposon_filters = [
+            # Require at least 90% of the sequence to be matched.
+            partial(_filter_score, min_score=0.9)
+        ]
+
+        transposon_aligner = ChainedAligner(
+            [ExactAligner(try_reverse=True),
+             SswAligner(try_reverse=True, filters=transposon_filters)])
+
+        # Setup linker aligner.
+        linker_filters = [
+            # Require at least 90% of the sequence to be matched.
+            partial(_filter_score, min_score=0.9),
+
+            # Perfect match at the end of the read?
+            partial(_filter_end_match, min_coverage=0.5, min_identity=0.9)
+        ]
+
+        linker_aligner = ChainedAligner(
+            [ExactAligner(try_reverse=False),
+             SswAligner(try_reverse=False, filters=linker_filters)]
+        )
+
         # Setup extractor and identifier for pipeline.
         extractor = ShearSplinkExtractor(
             transposon_sequence=transposon_seq,
-            transposon_aligner=ExactAligner(try_reverse=True),
+            transposon_aligner=transposon_aligner,
             barcode_sequences=barcode_seqs,
             barcode_map=barcode_map,
             barcode_aligner=ExactAligner(try_reverse=False),
             linker_sequence=linker_seq,
-            linker_aligner=ExactAligner(try_reverse=False),
+            linker_aligner=linker_aligner,
             contaminant_sequences=contaminant_seqs,
             min_length=args['min_genomic_length'],
             threads=args['threads'])
 
-        aligner = Bowtie2Aligner(args['reference'], bam_output=True)
+        aligner = Bowtie2Aligner(args['reference'], bam_output=True,
+                                 threads=args['threads'])
         identifier = ShearSplinkIdentifier(
             min_mapq=args['min_mapq'], min_depth=args['min_depth'])
 
         return cls(extractor=extractor, aligner=aligner, identifier=identifier)
+
+
+def _filter_identity(aln, min_identity):
+    return aln.identity >= min_identity
+
+
+def _filter_score(aln, min_score):
+    return aln.score >= min_score
+
+
+def _filter_end_match(aln, min_coverage=0.5, min_identity=1.0):
+    return aln.target_end == aln.target_len and \
+        aln.coverage >= min_coverage and aln.identity >= min_identity
 
 
 class ShearSplinkStatus(Enum):
