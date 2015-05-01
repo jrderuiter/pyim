@@ -42,6 +42,7 @@ before_script:
 
 script:
     - py.test --cov pyim --cov-report xml --junit-xml=shippable/testresults/results.xml
+    - mv coverage.xml shippable/codecoverage/
 
 notifications:
     email:
