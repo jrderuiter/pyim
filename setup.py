@@ -22,6 +22,7 @@ setup(
     include_package_data=True,
     entry_points={'console_scripts': [
         'pyim-align = pyim.main.align:main',
+        'pyim-merge = pyim.main.merge:main',
         'pyim-annotate = pyim.main.annotate:main',
         'pyim-cis = pyim.tools.cis.main:main'
     ]},
