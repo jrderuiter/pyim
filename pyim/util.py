@@ -1,20 +1,31 @@
+from __future__ import (absolute_import, division,
+                        print_function, unicode_literals)
+from builtins import (bytes, dict, int, list, object, range, str,
+                      ascii, chr, hex, input, next, oct, open,
+                      pow, round, super, filter, map, zip)
 
-def chunks(l, n):
-    """Divide a list l into chunks of size n.
+import heapq
 
-    :Parameters:
-      - `l` (list) - List of objects to divide into chunks.
-      - `n` (int)  - Chunk size.
 
-    :Returns:
-        List l divided into chunks of at most size n.
+class PrioritySet(object):
 
-    :Returns Type:
-        List of lists.
+    def __init__(self):
+        self._heap = []
+        self._set = set()
 
-    :Examples:
-        chunked_list = chunks([1, 2, 3], 2)
+    def push(self, item, priority):
+        if item not in self._set:
+            heapq.heappush(self._heap, (priority, item))
+            self._set.add(item)
 
-    """
+    def pop(self):
+        priority, item = heapq.heappop(self._heap)
+        self._set.remove(item)
+        return item
 
-    return [l[i:i+n] for i in range(0, len(l), n)]
+    def first(self):
+        _, item = min(self._heap)
+        return item
+
+    def __len__(self):
+        return len(self._heap)
