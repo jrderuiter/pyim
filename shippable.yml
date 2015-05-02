@@ -42,7 +42,7 @@ before_script:
 
 script:
     - py.test --junit-xml=shippable/testresults/results.xml
-    - coverage run --source pyim -m py.test
+    - coverage run --branch --source pyim -m py.test
     - coverage xml -o shippable/codecoverage/coverage.xml
 
 notifications:
