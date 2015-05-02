@@ -8,7 +8,7 @@ import pytest
 
 import pandas as pd
 
-from pyim.pipelines.base import genomic_distance
+from pyim.pipelines._base import genomic_distance
 from pyim.cluster import cluster_frame, cluster_frame_merged
 
 

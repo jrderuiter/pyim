@@ -6,14 +6,17 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 from future.utils import native_str
 
 import logging
+import pkg_resources
 from contextlib import contextmanager
 from collections import defaultdict
 from multiprocessing import Pool
 
-import pkg_resources
+import pysam
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist
+from skbio import io as skbio_io, DNASequence
+from tkgeno.io import FastqFile
 
 from pyim.util import PrioritySet
 
@@ -22,6 +25,8 @@ logging.basicConfig(
     datefmt='[%Y-%m-%d %H:%M:%S]',
     level=logging.INFO)
 
+
+# --- Pipelines --- #
 
 class Pipeline(object):
 
@@ -93,12 +98,14 @@ class Pipeline(object):
         # Identify transposon insertions.
         logger.info('Identifying insertions from alignment')
 
-        insertions = self._identifier.identify(aln_path, sample_map=barcodes)
+        insertions = self._identifier.identify(aln_path, barcode_map=barcodes)
         insertions.to_csv(str(output_path / 'insertions.txt'),
                           sep=native_str('\t'), index=False)
 
         logger.info('--- Done! ---')
 
+
+# --- Extractors --- #
 
 class GenomicExtractor(object):
 
@@ -107,11 +114,16 @@ class GenomicExtractor(object):
         self._min_length = min_length
         self._threads = threads
         self._chunk_size = chunk_size
-        self._stats = defaultdict(int)
+        self._stats = None
+
+        self.reset_stats()
 
     @property
     def stats(self):
         return self._stats
+
+    def reset_stats(self):
+        self._stats = defaultdict(int)
 
     def extract(self, reads):
         if self._threads == 1:
@@ -136,38 +148,83 @@ class GenomicExtractor(object):
         raise NotImplementedError()
 
     @classmethod
-    def _read_input(cls, file_path, format_):
+    def _read_input(cls, file_path):
         raise NotImplementedError()
 
     @classmethod
     @contextmanager
-    def _open_out(cls, file_path, format_):
+    def _open_out(cls, file_path):
         raise NotImplementedError()
 
     @classmethod
-    def _write_out(cls, sequence, fh, format_):
+    def _write_out(cls, sequence, fh):
         raise NotImplementedError()
 
-    def extract_from_file(self, file_path, format_=None):
-        reads = self._read_input(file_path, format_=format_)
+    def extract_from_file(self, file_path):
+        reads = self._read_input(file_path)
         for genomic, barcode in self.extract(reads):
                 yield genomic, barcode
 
-    def extract_to_file(self, reads, file_path, format_=None):
+    def extract_to_file(self, reads, file_path):
         barcodes = {}
 
-        with self._open_out(file_path, format_=format_) as file_:
+        with self._open_out(file_path) as file_:
             for genomic, barcode in self.extract(reads):
                 barcodes[genomic.id] = barcode
-                self._write_out(genomic, file_, format_=format_)
+                self._write_out(genomic, file_)
 
         return file_path, barcodes
 
-    def extract_file(self, input_path, output_path,
-                     in_format=None, out_format=None):
-        reads = self._read_input(input_path, format_=in_format)
-        return self.extract_to_file(reads, output_path, format_=out_format)
+    def extract_file(self, input_path, output_path):
+        reads = self._read_input(input_path)
+        return self.extract_to_file(reads, output_path)
 
+
+class FastqGenomicExtractor(GenomicExtractor):
+
+    def extract_read(self, read):
+        raise NotImplementedError()
+
+    @classmethod
+    def _read_input(cls, file_path):
+        with FastqFile.open(file_path) as file_:
+            for read in file_:
+                yield read
+
+    @classmethod
+    @contextmanager
+    def _open_out(cls, file_path):
+        with FastqFile.open(file_path, 'w') as file_:
+            yield file_
+
+    @classmethod
+    def _write_out(cls, sequence, fh):
+        fh.write(sequence)
+
+
+class FastaGenomicExtractor(GenomicExtractor):
+
+    def extract_read(self, read):
+        raise NotImplementedError()
+
+    @classmethod
+    def _read_input(cls, file_path):
+        for read in skbio_io.read(str(file_path), format='fasta',
+                                  constructor=DNASequence):
+            yield read
+
+    @classmethod
+    @contextmanager
+    def _open_out(cls, file_path):
+        with file_path.open('w') as file_:
+            yield file_
+
+    @classmethod
+    def _write_out(cls, sequence, fh):
+        skbio_io.write(sequence, into=fh, format='fasta')
+
+
+# --- Identifiers --- #
 
 class InsertionIdentifier(object):
 
@@ -178,19 +235,25 @@ class InsertionIdentifier(object):
         raise NotImplementedError()
 
     @classmethod
-    def _group_alignments_by_position(cls, alignments, barcode_map=None):
-        grouped = cls._group_alignments_by_pos(alignments)
+    def _group_by_position_bam(cls, bam_path, barcode_map=None, min_mapq=0):
+        bam_file = pysam.AlignmentFile(str(bam_path), 'rb')
 
-        if barcode_map is None:
-            for tup, grp in grouped:
-                yield tup + (np.nan, ), grp
-        else:
-            for tup, grp in grouped:
-                for bc, bc_grp in cls._split_by_barcode(grp, barcode_map):
-                    yield tup + (bc, ), bc_grp
+        # Collect insertions from alignments.
+        insertions = []
+        for ref_id in bam_file.references:
+            alignments = bam_file.fetch(reference=ref_id)
+            alignments = (aln for aln in alignments
+                          if aln.mapping_quality >= min_mapq)
+
+            # Group alignments by genomic position.
+            aln_groups = cls._group_by_position_barcode(
+                alignments, barcode_map=barcode_map)
+
+            for (pos, strand, bc), alns in aln_groups:
+                yield (ref_id, pos, strand, bc), alns
 
     @staticmethod
-    def _group_alignments_by_pos(alignments):
+    def _group_by_position(alignments):
         """ Groups alignments by their positions, grouping forward strand
             alignments with the same start position and reverse strand
             alignments with the same end position. Assumes alignments
@@ -243,6 +306,18 @@ class InsertionIdentifier(object):
                 yield (fwd_grp[0].reference_start, 1), fwd_grp
             if len(rev_grp) > 0:
                 yield (rev_grp[0].reference_end, -1), rev_grp
+
+    @classmethod
+    def _group_by_position_barcode(cls, alignments, barcode_map=None):
+        grouped = cls._group_by_position(alignments)
+
+        if barcode_map is None:
+            for tup, grp in grouped:
+                yield tup + (np.nan, ), grp
+        else:
+            for tup, grp in grouped:
+                for bc, bc_grp in cls._split_by_barcode(grp, barcode_map):
+                    yield tup + (bc, ), bc_grp
 
     @staticmethod
     def _split_by_barcode(alignments, barcode_map):

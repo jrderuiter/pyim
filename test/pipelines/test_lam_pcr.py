@@ -12,6 +12,8 @@ import pysam
 from pyim.pipelines.lam_pcr import LamPcrIdentifier
 
 
+# --- Identifier --- #
+
 AlignedSegment = namedtuple(
     'AlignedSegment',
     ['query_name', 'reference_id', 'reference_start',

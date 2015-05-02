@@ -7,20 +7,19 @@ from future.utils import native_str
 
 from enum import Enum
 from functools import partial
-from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pysam
-from skbio import io as skbio_io, DNASequence, SequenceCollection
+from skbio import DNASequence, SequenceCollection
 
 from pyim.alignment.genome import Bowtie2Aligner
 from pyim.alignment.vector import ExactAligner, SswAligner, ChainedAligner
 from pyim.cluster import cluster_frame_merged
 
-from .base import (Pipeline, GenomicExtractor,
-                   InsertionIdentifier, genomic_distance)
+from ._base import (Pipeline, FastaGenomicExtractor,
+                    InsertionIdentifier, genomic_distance)
 
 
 class ShearSplinkPipeline(Pipeline):
@@ -138,7 +137,7 @@ class ShearSplinkStatus(Enum):
     proper_read = 6
 
 
-class ShearSplinkExtractor(GenomicExtractor):
+class ShearSplinkExtractor(FastaGenomicExtractor):
 
     STATUS = ShearSplinkStatus
 
@@ -225,24 +224,6 @@ class ShearSplinkExtractor(GenomicExtractor):
                         return ((genomic, barcode),
                                 self.STATUS.proper_read)
 
-    @classmethod
-    def _read_input(cls, file_path, format_=None):
-        format_ = 'fasta' if format_ is None else format_
-        for read in skbio_io.read(str(file_path), format=format_,
-                                  constructor=DNASequence):
-            yield read
-
-    @classmethod
-    @contextmanager
-    def _open_out(cls, file_path, format_=None):
-        with file_path.open('w') as file_:
-            yield file_
-
-    @classmethod
-    def _write_out(cls, sequence, fh, format_=None):
-        format_ = 'fasta' if format_ is None else format_
-        skbio_io.write(sequence, into=fh, format=format_)
-
 
 class ShearSplinkIdentifier(InsertionIdentifier):
 
@@ -253,34 +234,25 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         self._min_mapq = min_mapq
         self._merge_distance = merge_distance
 
-    def identify(self, alignment_path, sample_map=None):
-        bam_file = pysam.AlignmentFile(str(alignment_path), 'rb')
-
-        # Collect insertions from alignments.
+    def identify(self, alignment_path, barcode_map=None):
         insertions = []
-        for ref_id in bam_file.references:
-            alignments = bam_file.fetch(reference=ref_id)
-            alignments = (aln for aln in alignments
-                          if aln.mapping_quality >= self._min_mapq)
 
-            # Group alignments by genomic position.
-            aln_groups = self._group_alignments_by_position(
-                alignments, barcode_map=sample_map)
+        groups = self._group_by_position_bam(
+            alignment_path, min_mapq=self._min_mapq)
+        for (ref_id, pos, strand, bc), alns in groups:
+            # Determine depth as the number of reads at this position.
+            depth = len(alns)
 
-            for (pos, strand, bc), alns in aln_groups:
-                # Determine depth as the number of reads at this position.
-                depth = len(alns)
+            # Determine depth_unique by looking at differences in the
+            # other position (end for fwd strand, start for rev strand).
+            other_pos = (a.reference_end for a in alns) if strand == 1 \
+                else (a.reference_start for a in alns)
+            depth_unique = len(set(other_pos))
 
-                # Determine depth_unique by looking at differences in the
-                # other position (end for fwd strand, start for rev strand).
-                other_pos = (a.reference_end for a in alns) if strand == 1 \
-                    else (a.reference_start for a in alns)
-                depth_unique = len(set(other_pos))
-
-                insertions.append(
-                    {'insertion_id': np.nan, 'seqname': ref_id,
-                     'location': pos, 'strand': strand, 'sample': bc,
-                     'depth': depth, 'depth_unique': depth_unique})
+            insertions.append(
+                {'insertion_id': np.nan, 'seqname': ref_id,
+                 'location': pos, 'strand': strand, 'sample': bc,
+                 'depth': depth, 'depth_unique': depth_unique})
 
         # Create insertion frame.
         insertions = pd.DataFrame.from_records(

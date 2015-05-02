@@ -12,7 +12,7 @@ import numpy as np
 from skbio import DNASequence
 
 from pyim.alignment.vector import ExactAligner
-from pyim.pipelines.base import InsertionIdentifier
+from pyim.pipelines._base import InsertionIdentifier
 
 
 # -------- Base identifier tests -------
@@ -80,7 +80,7 @@ class TestInsertionIdentifierGroupByPosition(object):
         alignments, _ = test_data
 
         identifier = InsertionIdentifier()
-        groups = list(identifier._group_alignments_by_position(alignments))
+        groups = list(identifier._group_by_position_barcode(alignments))
 
         # Should identify a total of two groups.
         assert len(groups) == 2
@@ -96,7 +96,7 @@ class TestInsertionIdentifierGroupByPosition(object):
         alignments, bc_map = test_data
 
         identifier = InsertionIdentifier()
-        groups = list(identifier._group_alignments_by_position(
+        groups = list(identifier._group_by_position_barcode(
             alignments, bc_map))
 
         # Should identify a total of three groups.
@@ -119,7 +119,7 @@ class TestInsertionIdentifierGroupByPosition(object):
         alignments = test_data_stranded
 
         identifier = InsertionIdentifier()
-        groups = list(identifier._group_alignments_by_position(alignments))
+        groups = list(identifier._group_by_position_barcode(alignments))
 
         # Should identify a total of three groups.
         assert len(groups) == 3
@@ -145,13 +145,13 @@ class TestInsertionIdentifierGroupByPosition(object):
     def test_unordered(self, test_data_unordered):
         with pytest.raises(ValueError):
             identifier = InsertionIdentifier()
-            list(identifier._group_alignments_by_position(test_data_unordered))
+            list(identifier._group_by_position_barcode(test_data_unordered))
 
     def test_first_reverse(self, test_data_first_reverse):
         alignments = test_data_first_reverse
 
         identifier = InsertionIdentifier()
-        groups = list(identifier._group_alignments_by_position(alignments))
+        groups = list(identifier._group_by_position_barcode(alignments))
 
         # Should have been returned in increasing order, even though
         # the -1 cluster occurs earlier in the alignments.
