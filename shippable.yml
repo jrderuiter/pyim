@@ -32,7 +32,7 @@ before_install:
     - pip install git+ssh://git@bitbucket.org/jrderuiter/genomics-toolkit.git
 
     # Install packages required for tests.
-    - conda install -y pytest
+    - conda install -y pytest coverage
 
 install:
     - python setup.py install
