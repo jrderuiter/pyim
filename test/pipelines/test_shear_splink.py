@@ -153,9 +153,22 @@ def patch_alignment_file(monkeypatch):
     monkeypatch.setattr(pysam, 'AlignmentFile', AlignmentFile)
 
 
+@pytest.fixture()
+def aln_barcode_map():
+    return {
+        'READ0': 'Sample1',
+        'READ1': 'Sample1',
+        'READ2': 'Sample1',
+        'READ3': 'Sample2',
+        'READ4': 'Sample2',
+        'READ5': 'Sample2',
+        'READ6': 'Sample2',
+    }
+
+
 # noinspection PyShadowingNames
 # noinspection PyMethodMayBeStatic
-class TestLamPcrIdentifier(object):
+class TestShearSplinkIdentifier(object):
 
     def test_identify(self, patch_alignment_file):
         identifier = ShearSplinkIdentifier(merge_distance=10, min_mapq=0)
@@ -183,3 +196,18 @@ class TestLamPcrIdentifier(object):
 
         # Should find four insertions, due to no merge_dist.
         assert len(insertions) == 4
+
+    def test_identify_barcodes(self, patch_alignment_file, aln_barcode_map):
+        identifier = ShearSplinkIdentifier(merge_distance=10, min_mapq=0)
+        insertions = identifier.identify(
+            'dummy.bam', barcode_map=aln_barcode_map)
+
+        # Should find four insertions, as reads (1,2) and 3
+        # now belong to different samples.
+        assert len(insertions) == 4
+
+        # Test insertion membership.
+        assert insertions['sample'].iloc[0] == 'Sample1'
+        assert insertions['sample'].iloc[1] == 'Sample2'
+        assert insertions['sample'].iloc[2] == 'Sample1'
+        assert insertions['sample'].iloc[3] == 'Sample2'

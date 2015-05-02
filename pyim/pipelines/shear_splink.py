@@ -238,7 +238,7 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         insertions = []
 
         groups = self._group_by_position_bam(
-            alignment_path, min_mapq=self._min_mapq)
+            alignment_path, min_mapq=self._min_mapq, barcode_map=barcode_map)
         for (ref_id, pos, strand, bc), alns in groups:
             # Determine depth as the number of reads at this position.
             depth = len(alns)
