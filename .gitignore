@@ -6,3 +6,4 @@ pyim.egg-info
 htmlcov
 .coverage
 _legacy
+docs/_build
