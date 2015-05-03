@@ -24,7 +24,7 @@ setup(
         'pyim-align = pyim.main.align:main',
         'pyim-merge = pyim.main.merge:main',
         'pyim-annotate = pyim.main.annotate:main',
-        'pyim-cis = pyim.tools.cis.main:main'
+        'pyim-cis = pyim.main.cis:main'
     ]},
     extras_require={'test': 'pytest'},
     zip_safe=True,
