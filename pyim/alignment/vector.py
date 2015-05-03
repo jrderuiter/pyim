@@ -91,6 +91,8 @@ class ExactAligner(VectorAligner):
 
     @staticmethod
     def _align_exact(query, target, query_ori):
+        # Note that this alignment returns the first occurrence it finds,
+        # later occurrences will not be found and are not checked for.
         try:
             index = target.sequence.index(query.sequence)
         except ValueError:
@@ -185,3 +187,16 @@ class ChainedAligner(VectorAligner):
                 break
 
         return aln
+
+
+def filter_identity(aln, min_identity):
+    return aln.identity >= min_identity
+
+
+def filter_score(aln, min_score):
+    return aln.score >= min_score
+
+
+def filter_end_match(aln, min_coverage=0.5, min_identity=1.0):
+    return aln.target_end == aln.target_len and \
+        aln.coverage >= min_coverage and aln.identity >= min_identity

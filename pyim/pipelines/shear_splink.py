@@ -11,11 +11,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pysam
 from skbio import DNASequence, SequenceCollection
 
 from pyim.alignment.genome import Bowtie2Aligner
-from pyim.alignment.vector import ExactAligner, SswAligner, ChainedAligner
+from pyim.alignment.vector import (ExactAligner, SswAligner, ChainedAligner,
+                                   filter_identity, filter_score,
+                                   filter_end_match)
 from pyim.cluster import cluster_frame_merged
 
 from ._base import (Pipeline, FastaGenomicExtractor,
@@ -73,7 +74,7 @@ class ShearSplinkPipeline(Pipeline):
 
         transposon_filters = [
             # Require at least 90% of the sequence to be matched.
-            partial(_filter_score, min_score=0.9)
+            partial(filter_score, min_score=0.9)
         ]
 
         transposon_aligner = ChainedAligner(
@@ -83,10 +84,10 @@ class ShearSplinkPipeline(Pipeline):
         # Setup linker aligner.
         linker_filters = [
             # Require at least 90% of the sequence to be matched.
-            partial(_filter_score, min_score=0.9),
+            partial(filter_score, min_score=0.9),
 
             # Perfect match at the end of the read?
-            partial(_filter_end_match, min_coverage=0.5, min_identity=0.9)
+            partial(filter_end_match, min_coverage=0.5, min_identity=0.9)
         ]
 
         linker_aligner = ChainedAligner(
@@ -113,19 +114,6 @@ class ShearSplinkPipeline(Pipeline):
             min_mapq=args['min_mapq'], min_depth=args['min_depth'])
 
         return cls(extractor=extractor, aligner=aligner, identifier=identifier)
-
-
-def _filter_identity(aln, min_identity):
-    return aln.identity >= min_identity
-
-
-def _filter_score(aln, min_score):
-    return aln.score >= min_score
-
-
-def _filter_end_match(aln, min_coverage=0.5, min_identity=1.0):
-    return aln.target_end == aln.target_len and \
-        aln.coverage >= min_coverage and aln.identity >= min_identity
 
 
 class ShearSplinkStatus(Enum):
@@ -213,6 +201,7 @@ class ShearSplinkExtractor(FastaGenomicExtractor):
                     # Read is complete, return genomic part and barcode.
                     genomic = read[transposon_aln.target_end:
                                    linker_aln.target_start]
+
                     if len(genomic) < self._min_length:
                         return None, self.STATUS.too_short
                     else:
@@ -268,7 +257,8 @@ class ShearSplinkIdentifier(InsertionIdentifier):
                 t=self._merge_distance)
 
         # Filter by min_depth.
-        insertions = insertions.ix[insertions['depth_unique'] > self._min_depth]
+        insertions = insertions.ix[
+            insertions['depth_unique'] > self._min_depth]
 
         # Sort by coordinate and add identifiers.
         insertions = insertions.sort(['seqname', 'location'])

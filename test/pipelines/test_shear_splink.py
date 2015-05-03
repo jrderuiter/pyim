@@ -17,20 +17,14 @@ from pyim.pipelines.shear_splink import \
 
 # --- Extractor --- #
 
-@pytest.fixture(scope='module')
-def reads():
-    return [
-        DNASequence('AAAT' + 'ACTG' + 'GCGTCTG' + 'CCCC'),  # BC01, tr, linker
-        DNASequence('AAAA' + 'ACTG' + 'GCGTCTG' + 'CCCC'),  # BC02, tr, linker
-        DNASequence('AAAT' + 'ACTG' + 'GCGTCTG'),           # No linker
-        DNASequence('ACTG' + 'GCGTCTG' + 'CCCC'),           # No barcode
-        DNASequence('AAAA' + 'GCGTCTG' + 'CCCC')            # No transposon
-    ]
+GENOMIC_SEQ1 = DNASequence('CACTGGCCACGCGAAGGTGC')
+GENOMIC_SEQ2 = DNASequence('GACCACTGGCCACGCGAAGG').reverse_complement()
+GENOMIC_SEQ3 = DNASequence('CGTTGGTCACTCTACCCACA')
 
 
 @pytest.fixture(scope='module')
 def transposon_seq():
-    return DNASequence('ACTG', id='transposon')
+    return DNASequence('TTTG', id='transposon')
 
 
 @pytest.fixture(scope='module')
@@ -41,78 +35,92 @@ def barcode_seqs():
 
 @pytest.fixture(scope='module')
 def linker_seq():
-    return DNASequence('CCCC', id='linker')
+    return DNASequence('CCCG', id='linker')
 
 
 # noinspection PyShadowingNames
 # noinspection PyMethodMayBeStatic
 class TestShearSplinkExtractor(object):
 
-    def test_forward(self, reads, transposon_seq, barcode_seqs, linker_seq):
+    def test_forward(self, transposon_seq, barcode_seqs, linker_seq):
+        read = DNASequence(str(barcode_seqs[0]) + str(transposon_seq) +
+                           str(GENOMIC_SEQ1) + str(linker_seq))
+
         extractor = ShearSplinkExtractor(
             transposon_sequence=transposon_seq,
             barcode_sequences=barcode_seqs,
             linker_sequence=linker_seq)
 
-        (genomic, barcode), status = extractor.extract_read(reads[0])
-        assert genomic.sequence == 'GCGTCTG'
-        assert barcode == 'BC01'
+        result, status = extractor.extract_read(read)
         assert status == ShearSplinkStatus.proper_read
+        assert result is not None
 
-        (genomic, barcode), status = extractor.extract_read(reads[1])
-        assert genomic.sequence == 'GCGTCTG'
-        assert barcode == 'BC02'
-        assert status == ShearSplinkStatus.proper_read
+        genomic, barcode = result
+        assert genomic.sequence == GENOMIC_SEQ1.sequence
+        assert barcode == barcode_seqs[0].id
 
-    def test_reverse(self, reads, transposon_seq, barcode_seqs, linker_seq):
+    def test_reverse(self, transposon_seq,
+                     barcode_seqs, linker_seq):
+        read = DNASequence(str(barcode_seqs[0]) + str(transposon_seq) +
+                           str(GENOMIC_SEQ1) + str(linker_seq))
+        read = read.reverse_complement()
+
         extractor = ShearSplinkExtractor(
             transposon_sequence=transposon_seq,
             barcode_sequences=barcode_seqs,
             linker_sequence=linker_seq)
 
-        res, status = extractor.extract_read(reads[0].reverse_complement())
+        res, status = extractor.extract_read(read)
         assert res is not None
         assert status == ShearSplinkStatus.proper_read
 
         genomic, barcode = res
-        assert genomic.sequence == 'GCGTCTG'
-        assert barcode == 'BC01'
+        assert genomic.sequence == GENOMIC_SEQ1.sequence
+        assert barcode == barcode_seqs[0].id
 
-    def test_missing_linker(self, reads, transposon_seq,
-                            barcode_seqs, linker_seq):
+    def test_missing_linker(self, transposon_seq, barcode_seqs, linker_seq):
+        read = DNASequence(str(barcode_seqs[0]) + str(transposon_seq) +
+                           str(GENOMIC_SEQ1))
+
         extractor = ShearSplinkExtractor(
             transposon_sequence=transposon_seq,
             barcode_sequences=barcode_seqs,
             linker_sequence=linker_seq)
 
-        res, status = extractor.extract_read(reads[2])
+        res, status = extractor.extract_read(read)
         assert res is None
         assert status == ShearSplinkStatus.no_linker
 
-    def test_missing_barcode(self, reads, transposon_seq,
+    def test_missing_barcode(self, transposon_seq,
                              barcode_seqs, linker_seq):
+        read = DNASequence(str(transposon_seq) + str(GENOMIC_SEQ1) +
+                           str(linker_seq))
+
         extractor = ShearSplinkExtractor(
             transposon_sequence=transposon_seq,
             barcode_sequences=barcode_seqs,
             linker_sequence=linker_seq)
 
-        res, status = extractor.extract_read(reads[3])
+        res, status = extractor.extract_read(read)
         assert res is None
         assert status == ShearSplinkStatus.no_barcode
 
-    def test_missing_transposon(self, reads, transposon_seq,
+    def test_missing_transposon(self, transposon_seq,
                                 barcode_seqs, linker_seq):
+        read = DNASequence(str(barcode_seqs[0]) + str(GENOMIC_SEQ1) +
+                           str(linker_seq))
+
         extractor = ShearSplinkExtractor(
             transposon_sequence=transposon_seq,
             barcode_sequences=barcode_seqs,
             linker_sequence=linker_seq)
 
-        res, status = extractor.extract_read(reads[4])
+        res, status = extractor.extract_read(read)
         assert res is None
         assert status == ShearSplinkStatus.no_transposon
 
-# --- Identifier --- #
 
+# --- Identifier --- #
 
 AlignedSegment = namedtuple(
     'AlignedSegment',
