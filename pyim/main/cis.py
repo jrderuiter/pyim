@@ -55,7 +55,7 @@ def main():
     ins_annotated = pd.merge(ins_frame, cis_mapping, on='insertion_id')
 
     # Write out outputs.
-    cis.to_csv(str(args.output.with_suffix('.cis.txt')),
+    cis.to_csv(str(args.output.with_suffix('.sites.txt')),
                sep=native_str('\t'), index=False)
     ins_annotated.to_csv(str(args.output), sep=native_str('\t'), index=False)
 
