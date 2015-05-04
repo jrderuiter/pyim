@@ -30,7 +30,7 @@ class ShearSplinkPipeline(Pipeline):
         parser = subparsers.add_parser(name, help=name + ' help')
 
         parser.add_argument('input', type=Path)
-        parser.add_argument('output', type=Path)
+        parser.add_argument('output_dir', type=Path)
         parser.add_argument('reference', type=Path)
         parser.add_argument('transposon', type=Path)
         parser.add_argument('barcodes', type=Path)
@@ -260,6 +260,9 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         insertions = insertions.ix[
             insertions['depth_unique'] > self._min_depth]
 
+        # Add clonality annotation.
+        insertions = self._annotate_clonality(insertions)
+
         # Sort by coordinate and add identifiers.
         insertions = insertions.sort(['seqname', 'location'])
 
@@ -283,3 +286,12 @@ class ShearSplinkIdentifier(InsertionIdentifier):
                  'depth': ref['depth'].sum(),
                  'depth_unique': ref['depth_unique'].sum()},
                 index=ref.index)
+
+    @staticmethod
+    def _annotate_clonality(ins_frame):
+        grouped = ins_frame.groupby('sample')
+        clonality = grouped.apply(lambda grp: grp['depth_unique'] /
+                                  grp['depth_unique'].max())
+        clonality.index = clonality.index.droplevel()
+        clonality.name = 'clonality'
+        return pd.concat([ins_frame, clonality], axis=1)

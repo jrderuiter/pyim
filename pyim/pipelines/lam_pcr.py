@@ -4,12 +4,14 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)
 
+from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from skbio import DNASequence, SequenceCollection
+from tkgeno.io import FastqFile
 
 from pyim.alignment.genome import Bowtie2Aligner
 from pyim.alignment.vector import ExactAligner
@@ -26,12 +28,12 @@ class LamPcrPipeline(Pipeline):
         parser = subparsers.add_parser(name, help=name + ' help')
 
         parser.add_argument('input', type=Path)
-        parser.add_argument('output', type=Path)
+        parser.add_argument('output_dir', type=Path)
         parser.add_argument('reference', type=Path)
 
         parser.add_argument('--contaminants', type=Path)
         parser.add_argument('--barcode_sequences', type=Path)
-        parser.add_argument('--barcode_mapping', type=Path)
+        parser.add_argument('--barcode_map', type=Path)
         parser.add_argument('--min_genomic_length', type=int, default=15)
 
         parser.add_argument('--min_depth', type=int, default=2)
@@ -43,6 +45,11 @@ class LamPcrPipeline(Pipeline):
 
     @classmethod
     def from_args(cls, args):
+
+        # Read contaminant sequences.
+        contaminant_seqs = SequenceCollection.read(
+            str(args['contaminants']), constructor=DNASequence) \
+            if args['contaminants'] is not None else None
 
         # Read barcode sequences if supplied.
         barcode_seqs = SequenceCollection.read(
@@ -61,14 +68,15 @@ class LamPcrPipeline(Pipeline):
         extractor = LamPcrExtractor(
             barcode_sequences=barcode_seqs,
             barcode_map=barcode_map,
-            threads=args.threads,
-            min_length=args.min_length)
+            contaminant_sequences=contaminant_seqs,
+            # threads=args['threads'],
+            min_length=args['min_genomic_length'])
 
-        aligner = Bowtie2Aligner(reference=args.reference,
-                                 local=True, threads=args.threads)
+        aligner = Bowtie2Aligner(reference=args['reference'],
+                                 local=True, threads=args['threads'])
 
-        identifier = LamPcrIdentifier(min_mapq=args.min_mapq,
-                                      min_depth=args.min_depth)
+        identifier = LamPcrIdentifier(min_mapq=args['min_mapq'],
+                                      min_depth=args['min_depth'])
 
         return cls(extractor=extractor,
                    aligner=aligner,
@@ -78,28 +86,43 @@ class LamPcrPipeline(Pipeline):
 class LamPcrStatus(Enum):
     contaminant = 1
     no_barcode = 2
-    too_short = 3
-    proper_read = 4
+    duplicate_barcode = 3
+    too_short = 4
+    proper_read = 5
 
 
 class LamPcrExtractor(FastqGenomicExtractor):
-    # TODO: add contaminants.
 
     STATUS = LamPcrStatus
 
     def __init__(self, barcode_sequences=None, barcode_map=None,
-                 min_length=1, threads=1, chunk_size=1000):
+                 contaminant_sequences=None, min_length=1,
+                 threads=1, chunk_size=1000):
         super().__init__(min_length=min_length, threads=threads,
                          chunk_size=chunk_size)
 
         self._barcode_aligner = ExactAligner(try_reverse=False)
-        self._barcode_sequences = barcode_sequences
+        self._barcodes = barcode_sequences
         self._barcode_map = barcode_map
 
+        self._contaminant_aligner = ExactAligner(try_reverse=True)
+        self._contaminants = contaminant_sequences
+
     def extract_read(self, read):
-        if self._barcode_sequences is not None:
-            bc_aln = self._barcode_aligner.align_multiple(
-                self._barcode_sequences, read)
+        # Check for contaminants.
+        if self._contaminants is not None:
+            contaminant_aln = self._contaminant_aligner.\
+                align_multiple(self._contaminants, read, how='any')
+
+            if contaminant_aln is not None:
+                return None, self.STATUS.contaminant
+
+        if self._barcodes is not None:
+            try:
+                bc_aln = self._barcode_aligner.align_multiple(
+                    self._barcodes, read)
+            except ValueError:
+                return None, self.STATUS.duplicate_barcode
 
             if bc_aln is None:
                 return None, self.STATUS.no_barcode
@@ -119,6 +142,23 @@ class LamPcrExtractor(FastqGenomicExtractor):
             return None, self.STATUS.too_short
         else:
             return (read, barcode), self.STATUS.proper_read
+
+    @classmethod
+    def _read_input(cls, file_path):
+        with FastqFile.open(file_path) as file_:
+            for i, read in enumerate(file_):
+                if i % 100000 == 0 and i > 0:
+                    print('Processed {} reads'.format(i))
+                yield read
+
+    @classmethod
+    @contextmanager
+    def _open_out(cls, file_path):
+        if file_path.suffixes[-1] == '.gz':
+            file_path = file_path.with_suffix('')
+
+        with FastqFile.open(file_path, 'wt') as file_:
+            yield file_
 
 
 class LamPcrIdentifier(InsertionIdentifier):

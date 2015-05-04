@@ -44,7 +44,7 @@ class Pipeline(object):
     def from_args(cls, args):
         raise NotImplementedError()
 
-    def run(self, input_path, output_path):
+    def run(self, input_path, output_dir):
         logger = logging.getLogger()
 
         version = pkg_resources.get_distribution("pyim").version
@@ -54,12 +54,13 @@ class Pipeline(object):
             self.__class__.__name__.replace('Pipeline', '')))
 
         # Create directories if needed.
-        if not output_path.exists():
-            output_path.mkdir()
+        if not output_dir.exists():
+            output_dir.mkdir()
 
         if input_path.suffix not in {'.bam', '.sam'}:
-            genomic_path = output_path / ('genomic' + input_path.suffix)
-            barcode_path = output_path / 'genomic.barcodes.txt'
+            genomic_path = output_dir / ('genomic' +
+                                         ''.join(input_path.suffixes))
+            barcode_path = output_dir / 'genomic.barcodes.txt'
 
             # Extract genomic reads from input.
             logger.info('Extracting genomic sequences from reads')
@@ -91,7 +92,7 @@ class Pipeline(object):
                 self._aligner.get_version()))
 
             aln_path = self._aligner.align_file(
-                file=genomic_path, output_dir=output_path)
+                file=genomic_path, output_dir=output_dir)
         else:
             aln_path, barcodes = input_path, None
 
@@ -99,7 +100,7 @@ class Pipeline(object):
         logger.info('Identifying insertions from alignment')
 
         insertions = self._identifier.identify(aln_path, barcode_map=barcodes)
-        insertions.to_csv(str(output_path / 'insertions.txt'),
+        insertions.to_csv(str(output_dir / 'insertions.txt'),
                           sep=native_str('\t'), index=False)
 
         logger.info('--- Done! ---')
@@ -194,7 +195,7 @@ class FastqGenomicExtractor(GenomicExtractor):
     @classmethod
     @contextmanager
     def _open_out(cls, file_path):
-        with FastqFile.open(file_path, 'w') as file_:
+        with FastqFile.open(file_path, 'wt') as file_:
             yield file_
 
     @classmethod

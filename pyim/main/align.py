@@ -41,7 +41,7 @@ def main():
 
     pipeline_name = arg_dict.pop('pipeline')
     input_path = arg_dict.pop('input')
-    output_path = arg_dict.pop('output')
+    output_path = arg_dict.pop('output_dir')
 
     # Instantiate chosen pipeline and run!
     try:
