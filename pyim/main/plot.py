@@ -31,8 +31,9 @@ def setup_parser():
     parser.add_argument('--region', required=True)
     parser.add_argument('--figure_width', default=None)
 
-    parser.add_argument('--line_height_gene', type=float, default=0.5)
-    parser.add_argument('--line_height_insertion', type=float, default=0.5)
+    parser.add_argument('--insertion_width', type=int, default=2000)
+    parser.add_argument('--gene_line_height', type=float, default=0.5)
+    parser.add_argument('--insertion_line_height', type=float, default=0.5)
 
     return parser
 
@@ -51,12 +52,13 @@ def main():
     ins_frame = pd.read_csv(str(args.input), sep=native_str('\t'),
                             dtype={'seqname': str})
     ins_track = FeatureTrack.from_location(
-        ins_frame, width=2000, line_height=args.line_height_insertion,
+        ins_frame, width=args.insertion_width,
+        line_height=args.insertion_line_height,
         color='strand', color_map=color_map)
 
     # Setup gene region track.
     gtf_file = GtfFile(args.reference_gtf)
-    gene_track = GeneRegionTrack(gtf_file, line_height=args.line_height_gene)
+    gene_track = GeneRegionTrack(gtf_file, line_height=args.gene_line_height)
 
     seqname, start, end = re.split('[:-]', args.region)
     start, end = int(start), int(end)
