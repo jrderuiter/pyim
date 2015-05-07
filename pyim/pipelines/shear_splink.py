@@ -15,8 +15,7 @@ from skbio import DNASequence, SequenceCollection
 
 from pyim.alignment.genome import Bowtie2Aligner
 from pyim.alignment.vector import (ExactAligner, SswAligner, ChainedAligner,
-                                   filter_identity, filter_score,
-                                   filter_end_match)
+                                   filter_score, filter_end_match)
 from pyim.cluster import cluster_frame_merged
 
 from ._base import (Pipeline, FastaGenomicExtractor,
@@ -233,8 +232,6 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         groups = self._group_by_position_bam(
             alignment_path, min_mapq=self._min_mapq, barcode_map=barcode_map)
         for (ref_id, pos, strand, bc), alns in groups:
-            # if ref_id == '1' and 134888200 < pos < 134888800:
-            #    import pdb; pdb.set_trace()
             # Determine depth as the number of reads at this position.
             depth = len(alns)
 
@@ -253,7 +250,6 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         insertions = pd.DataFrame.from_records(
             insertions, columns=['insertion_id', 'seqname', 'location',
                                  'strand', 'sample', 'depth', 'depth_unique'])
-
         # Merge insertions in close proximity to account for sequencing errors.
         if self._merge_distance > 0:
             insertions = cluster_frame_merged(
@@ -264,7 +260,7 @@ class ShearSplinkIdentifier(InsertionIdentifier):
 
         # Filter by min_depth.
         insertions = insertions.ix[
-            insertions['depth_unique'] > self._min_depth]
+            insertions['depth_unique'] >= self._min_depth]
 
         # Add clonality annotation.
         insertions = self._annotate_clonality(insertions)
