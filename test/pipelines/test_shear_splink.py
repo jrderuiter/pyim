@@ -9,6 +9,7 @@ from collections import namedtuple
 import pytest
 
 import pysam
+import pandas as pd
 from skbio import DNASequence
 
 from pyim.pipelines.shear_splink import \
@@ -174,6 +175,17 @@ def aln_barcode_map():
     }
 
 
+@pytest.fixture()
+def ins_frame_merge():
+    return pd.DataFrame({'insertion_id': ['INS_1', 'INS_2'],
+                         'seqname': ['1', '1'],
+                         'location': [100, 102],
+                         'strand': [1, 1],
+                         'sample': ['S1', 'S1'],
+                         'depth': [1, 200],
+                         'depth_unique': [1, 150]})
+
+
 # noinspection PyShadowingNames
 # noinspection PyMethodMayBeStatic
 class TestShearSplinkIdentifier(object):
@@ -206,7 +218,8 @@ class TestShearSplinkIdentifier(object):
         assert len(insertions) == 4
 
     def test_identify_barcodes(self, patch_alignment_file, aln_barcode_map):
-        identifier = ShearSplinkIdentifier(merge_distance=10, min_mapq=0)
+        identifier = ShearSplinkIdentifier(
+            merge_distance=10, min_mapq=0, min_depth=0)
         insertions = identifier.identify(
             'dummy.bam', barcode_map=aln_barcode_map)
 
@@ -219,3 +232,35 @@ class TestShearSplinkIdentifier(object):
         assert insertions['sample'].iloc[1] == 'Sample2'
         assert insertions['sample'].iloc[2] == 'Sample1'
         assert insertions['sample'].iloc[3] == 'Sample2'
+
+    def test_merge(self, ins_frame_merge):
+        identifier = ShearSplinkIdentifier()
+        merged_ins = identifier._merge_insertions(ins_frame_merge)
+
+        assert merged_ins.seqname == '1'
+        assert merged_ins.location == 102  # Location weighted towards INS_2.
+        assert merged_ins.strand == 1
+        assert merged_ins.sample == 'S1'
+        assert merged_ins.depth == 201
+        assert merged_ins.depth_unique == 151
+
+    def test_merge_diff_sample(self, ins_frame_merge):
+        ins_frame_merge.ix[1, 'sample'] = 'S2'
+
+        identifier = ShearSplinkIdentifier()
+        with pytest.raises(ValueError):
+            identifier._merge_insertions(ins_frame_merge)
+
+    def test_merge_diff_strand(self, ins_frame_merge):
+        ins_frame_merge.ix[1, 'strand'] = -1
+
+        identifier = ShearSplinkIdentifier()
+        with pytest.raises(ValueError):
+            identifier._merge_insertions(ins_frame_merge)
+
+    def test_merge_diff_seqname(self, ins_frame_merge):
+        ins_frame_merge.ix[1, 'seqname'] = '2'
+
+        identifier = ShearSplinkIdentifier()
+        with pytest.raises(ValueError):
+            identifier._merge_insertions(ins_frame_merge)

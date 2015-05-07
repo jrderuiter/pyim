@@ -121,8 +121,9 @@ class ShearSplinkStatus(Enum):
     no_transposon = 2
     no_linker = 3
     no_barcode = 4
-    too_short = 5
-    proper_read = 6
+    multiple_barcodes = 5
+    too_short = 6
+    proper_read = 7
 
 
 class ShearSplinkExtractor(FastaGenomicExtractor):
@@ -191,8 +192,11 @@ class ShearSplinkExtractor(FastaGenomicExtractor):
                 # Missing linker sequence.
                 return None, self.STATUS.no_linker
             else:
-                barcode_aln = self._barcode_aligner.\
-                    align_multiple(self._barcodes, read)
+                try:
+                    barcode_aln = self._barcode_aligner.\
+                        align_multiple(self._barcodes, read)
+                except ValueError:
+                    return None, self.STATUS.multiple_barcodes
 
                 if barcode_aln is None:
                     # Missing barcode sequence.
@@ -229,6 +233,8 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         groups = self._group_by_position_bam(
             alignment_path, min_mapq=self._min_mapq, barcode_map=barcode_map)
         for (ref_id, pos, strand, bc), alns in groups:
+            # if ref_id == '1' and 134888200 < pos < 134888800:
+            #    import pdb; pdb.set_trace()
             # Determine depth as the number of reads at this position.
             depth = len(alns)
 
@@ -276,22 +282,45 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         if len(frame) == 0:
             return frame.iloc[0]
         else:
+            if len(set(frame.seqname)) > 1:
+                raise ValueError('Insertions have different seqnames')
+            if len(set(frame.strand)) > 1:
+                raise ValueError('Insertions have different strands')
+            if len(set(frame.sample.astype(str))) > 1:
+                raise ValueError('Insertions have different samples')
+
             ref = frame.iloc[0]
+
+            # Calculate new location as mean, biased towards
+            # insertions with more weight (a higher ULP).
+            weighted_loc = np.average(
+                frame.location, weights=frame.depth_unique)
+            weighted_loc = int(round(weighted_loc))
+
             return pd.Series(
                 {'insertion_id': np.nan,
-                 'seqname': ref['seqname'],
-                 'location': int(frame['location'].mean()),
-                 'strand': ref['strand'],
-                 'sample': ref['sample'],
-                 'depth': ref['depth'].sum(),
-                 'depth_unique': ref['depth_unique'].sum()},
+                 'seqname': ref.seqname,
+                 'location': weighted_loc,
+                 'strand': ref.strand,
+                 'sample': ref.sample,
+                 'depth': frame.depth.sum(),
+                 'depth_unique': frame.depth_unique.sum()},
                 index=ref.index)
 
     @staticmethod
     def _annotate_clonality(ins_frame):
-        grouped = ins_frame.groupby('sample')
-        clonality = grouped.apply(lambda grp: grp['depth_unique'] /
-                                  grp['depth_unique'].max())
-        clonality.index = clonality.index.droplevel()
-        clonality.name = 'clonality'
-        return pd.concat([ins_frame, clonality], axis=1)
+        groups = ins_frame.groupby('sample')
+
+        if len(groups) > 0:
+            clonality = groups.apply(lambda grp: grp['depth_unique'] /
+                                     grp['depth_unique'].max())
+
+            clonality.index = clonality.index.droplevel()
+            clonality.name = 'clonality'
+        else:
+            clonality = pd.Series({'clonality': np.NaN},
+                                  index=ins_frame.index)
+
+        ins_frame_clonality = pd.concat([ins_frame, clonality], axis=1)
+
+        return ins_frame_clonality
