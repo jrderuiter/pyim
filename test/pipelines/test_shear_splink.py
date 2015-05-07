@@ -248,19 +248,19 @@ class TestShearSplinkIdentifier(object):
         ins_frame_merge.ix[1, 'sample'] = 'S2'
 
         identifier = ShearSplinkIdentifier()
-        with pytest.raises(ValueError):
+        with pytest.raises(AssertionError):
             identifier._merge_insertions(ins_frame_merge)
 
     def test_merge_diff_strand(self, ins_frame_merge):
         ins_frame_merge.ix[1, 'strand'] = -1
 
         identifier = ShearSplinkIdentifier()
-        with pytest.raises(ValueError):
+        with pytest.raises(AssertionError):
             identifier._merge_insertions(ins_frame_merge)
 
     def test_merge_diff_seqname(self, ins_frame_merge):
         ins_frame_merge.ix[1, 'seqname'] = '2'
 
         identifier = ShearSplinkIdentifier()
-        with pytest.raises(ValueError):
+        with pytest.raises(AssertionError):
             identifier._merge_insertions(ins_frame_merge)

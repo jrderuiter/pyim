@@ -282,13 +282,12 @@ class ShearSplinkIdentifier(InsertionIdentifier):
         if len(frame) == 0:
             return frame.iloc[0]
         else:
-            if len(set(frame.seqname)) > 1:
-                raise ValueError('Insertions have different seqnames')
-            if len(set(frame.strand)) > 1:
-                raise ValueError('Insertions have different strands')
-            if len(set(frame.sample.astype(str))) > 1:
-                raise ValueError('Insertions have different samples')
+            # Check if merging is sane.
+            assert len(set(frame.seqname)) == 1
+            assert len(set(frame.strand)) == 1
+            assert len(set(frame.sample.astype(str))) == 1
 
+            # Pick first row as reference for shared fields.
             ref = frame.iloc[0]
 
             # Calculate new location as mean, biased towards
