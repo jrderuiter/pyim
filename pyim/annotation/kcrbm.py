@@ -15,6 +15,11 @@ from tkgeno.util.rpy2 import importr, pandas_to_dataframe, dataframe_to_pandas
 
 from .base import Annotator
 
+CHR_MAP = dict(zip(
+    list(map(str, range(1, 19+1))) + ['X', 'Y'],
+    range(1, 21+1)
+))
+
 
 class KcRbmAnnotator(Annotator):
 
@@ -60,12 +65,17 @@ class KcRbmAnnotator(Annotator):
                                    'location', 'strand']]
         kcrbm_frame.columns = ['id', 'chr', 'base', 'ori']
 
-        # Map chromosomes to numeric values.
-        chr_map = dict(zip(
-            list(map(str, range(1, 19+1))) + ['X', 'Y'],
-            range(1, 21+1)
-        ))
-        kcrbm_frame['chr'] = kcrbm_frame['chr'].map(chr_map).astype(int)
+        # Remove any eccentric chromosomes from frame.
+        seq_mask = kcrbm_frame.chr.isin(CHR_MAP.keys())
+        if any(~seq_mask):
+            dropped_chr = set(kcrbm_frame.ix[~seq_mask].chr)
+            print('Warning: dropped insertions not in regular '
+                  'chromosomes ({})'.format(', '.join(dropped_chr)))
+
+            kcrbm_frame = kcrbm_frame.ix[seq_mask]
+
+        # Convert chr to numeric representation.
+        kcrbm_frame['chr'] = kcrbm_frame['chr'].map(CHR_MAP).astype(int)
 
         # Convert orientation if required.
         if not issubdtype(kcrbm_frame['ori'].dtype, int):
