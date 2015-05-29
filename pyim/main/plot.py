@@ -35,6 +35,8 @@ def setup_parser():
     parser.add_argument('--insertion_width', type=int, default=2000)
     parser.add_argument('--gene_line_height', type=float, default=0.5)
     parser.add_argument('--insertion_line_height', type=float, default=0.5)
+
+    parser.add_argument('--flip_x', default=False, action='store_true')
     parser.add_argument('--flip_y', default=False, action='store_true')
 
     parser.add_argument('--dpi', default=72, type=int)
@@ -81,7 +83,7 @@ def main():
     fig, axes = plot_tracks(tracks,
                             seqname=seqname, start=start, end=end,
                             figsize=(int(args.figure_width), None),
-                            tick_top=args.flip_y)
+                            tick_top=args.flip_y, reverse_x=args.flip_x)
 
     if args.output.suffix == '.png':
         save_kwargs = {'dpi': args.dpi}
