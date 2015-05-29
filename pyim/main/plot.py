@@ -30,10 +30,14 @@ def setup_parser():
 
     parser.add_argument('--region', required=True)
     parser.add_argument('--figure_width', default=None)
+    parser.add_argument('--transcript_ids', nargs='+', default=None)
 
     parser.add_argument('--insertion_width', type=int, default=2000)
     parser.add_argument('--gene_line_height', type=float, default=0.5)
     parser.add_argument('--insertion_line_height', type=float, default=0.5)
+    parser.add_argument('--flip_y', default=False, action='store_true')
+
+    parser.add_argument('--dpi', default=72, type=int)
 
     return parser
 
@@ -49,24 +53,42 @@ def main():
     else:
         color_map = {1: 'red', -1: 'blue'}
 
+    # Parse region.
+    seqname, start, end = re.split('[:-]', args.region)
+    start, end = int(start), int(end)
+
+    # Setup insertion track.
     ins_frame = pd.read_csv(str(args.input), sep=native_str('\t'),
                             dtype={'seqname': str})
     ins_track = FeatureTrack.from_location(
         ins_frame, width=args.insertion_width,
         line_height=args.insertion_line_height,
-        color='strand', color_map=color_map)
+        color='strand', color_map=color_map, flip_y=args.flip_y)
 
     # Setup gene region track.
-    gtf_file = GtfFile(args.reference_gtf)
-    gene_track = GeneRegionTrack(gtf_file, line_height=args.gene_line_height)
+    gtf = GtfFile(args.reference_gtf)
 
-    seqname, start, end = re.split('[:-]', args.region)
-    start, end = int(start), int(end)
+    if args.transcript_ids is not None:
+        gtf = gtf.get_region(seqname, start, end, expand=True)
+        gtf = gtf.ix[gtf.transcript_id.isin(args.transcript_ids)]
 
-    fig, axes = plot_tracks([ins_track, gene_track],
+    gene_track = GeneRegionTrack(gtf, line_height=args.gene_line_height)
+
+    # Setup plot.
+    tracks = [gene_track, ins_track] \
+        if args.flip_y else [ins_track, gene_track]
+
+    fig, axes = plot_tracks(tracks,
                             seqname=seqname, start=start, end=end,
-                            figsize=(int(args.figure_width), None))
-    fig.savefig(str(args.output), bbox_inches='tight')
+                            figsize=(int(args.figure_width), None),
+                            tick_top=args.flip_y)
+
+    if args.output.suffix == '.png':
+        save_kwargs = {'dpi': args.dpi}
+    else:
+        save_kwargs = {}
+
+    fig.savefig(str(args.output), bbox_inches='tight', **save_kwargs)
 
 if __name__ == '__main__':
     main()
