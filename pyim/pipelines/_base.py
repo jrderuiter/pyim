@@ -1,5 +1,6 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
+# noinspection PyUnresolvedReferences
 from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)
@@ -7,7 +8,6 @@ from future.utils import native_str
 
 import logging
 import pkg_resources
-from contextlib import contextmanager
 from collections import defaultdict
 from multiprocessing import Pool
 
@@ -15,9 +15,10 @@ import pysam
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist
-from skbio import io as skbio_io, DNASequence
-from tkgeno.io import FastqFile
+from skbio import io as skbio_io
 
+# noinspection PyUnresolvedReferences
+from pyim.io import fastq
 from pyim.util import PrioritySet
 
 logging.basicConfig(
@@ -47,7 +48,7 @@ class Pipeline(object):
     def run(self, input_path, output_dir):
         logger = logging.getLogger()
 
-        version = pkg_resources.get_distribution("pyim").version
+        version = pkg_resources.get_distribution('pyim').version
         logger.info('--- PyIM v{} ---'.format(version))
 
         logger.info('Starting {} pipeline'.format(
@@ -108,13 +109,15 @@ class Pipeline(object):
 
 # --- Extractors --- #
 
+# noinspection PyShadowingBuiltins
 class GenomicExtractor(object):
 
-    def __init__(self, min_length=1, threads=1, chunk_size=1000, **kwargs):
+    DEFAULT_IN_FORMAT = 'fasta'
+    DEFAULT_OUT_FORMAT = 'fasta'
+
+    def __init__(self, min_length=1, **kwargs):
         super().__init__()
         self._min_length = min_length
-        self._threads = threads
-        self._chunk_size = chunk_size
         self._stats = None
 
         self.reset_stats()
@@ -127,12 +130,55 @@ class GenomicExtractor(object):
         self._stats = defaultdict(int)
 
     def extract(self, reads):
+        for read in reads:
+            result, status = self.extract_read(read)
+            self._stats[status] += 1
+            if result is not None:
+                yield result
+
+    def extract_read(self, read):
+        raise NotImplementedError()
+
+    def extract_from_file(self, file_path, format=None):
+        format = self.DEFAULT_IN_FORMAT if format is None else format
+
+        reads = skbio_io.read(str(file_path), format=format)
+        for genomic, barcode in self.extract(reads):
+                yield genomic, barcode
+
+    def extract_to_file(self, reads, file_path, format=None):
+        format = self.DEFAULT_OUT_FORMAT if format is None else format
+
+        barcodes = {}
+        with open(str(file_path), 'w') as file_:
+            for genomic, barcode in self.extract(reads):
+                barcodes[genomic.id] = barcode
+                skbio_io.write(obj=genomic, format=format, into=file_)
+
+        return file_path, barcodes
+
+    def extract_file(self, input_path, output_path,
+                     format_in=None, format_out=None):
+        format_in = self.DEFAULT_IN_FORMAT if format_in is None else format_in
+        format_out = self.DEFAULT_OUT_FORMAT \
+            if format_out is None else format_out
+
+        reads = skbio_io.read(str(input_path), format=format_in)
+        return self.extract_to_file(reads, output_path, format=format_out)
+
+
+class ParallelGenomicExtractor(GenomicExtractor):
+
+    def __init__(self, min_length=1, threads=1, chunk_size=1000, **kwargs):
+        super().__init__(min_length=min_length)
+
+        self._threads = threads
+        self._chunk_size = chunk_size
+
+    def extract(self, reads):
         if self._threads == 1:
-            for read in reads:
-                result, status = self.extract_read(read)
-                self._stats[status] += 1
-                if result is not None:
-                    yield result
+            for result in super().extract(reads):
+                yield result
         else:
             pool = Pool(self._threads)
 
@@ -147,82 +193,6 @@ class GenomicExtractor(object):
 
     def extract_read(self, read):
         raise NotImplementedError()
-
-    @classmethod
-    def _read_input(cls, file_path):
-        raise NotImplementedError()
-
-    @classmethod
-    @contextmanager
-    def _open_out(cls, file_path):
-        raise NotImplementedError()
-
-    @classmethod
-    def _write_out(cls, sequence, fh):
-        raise NotImplementedError()
-
-    def extract_from_file(self, file_path):
-        reads = self._read_input(file_path)
-        for genomic, barcode in self.extract(reads):
-                yield genomic, barcode
-
-    def extract_to_file(self, reads, file_path):
-        barcodes = {}
-
-        with self._open_out(file_path) as file_:
-            for genomic, barcode in self.extract(reads):
-                barcodes[genomic.id] = barcode
-                self._write_out(genomic, file_)
-
-        return file_path, barcodes
-
-    def extract_file(self, input_path, output_path):
-        reads = self._read_input(input_path)
-        return self.extract_to_file(reads, output_path)
-
-
-class FastqGenomicExtractor(GenomicExtractor):
-
-    def extract_read(self, read):
-        raise NotImplementedError()
-
-    @classmethod
-    def _read_input(cls, file_path):
-        with FastqFile.open(file_path) as file_:
-            for read in file_:
-                yield read
-
-    @classmethod
-    @contextmanager
-    def _open_out(cls, file_path):
-        with FastqFile.open(file_path, 'wt') as file_:
-            yield file_
-
-    @classmethod
-    def _write_out(cls, sequence, fh):
-        fh.write(sequence)
-
-
-class FastaGenomicExtractor(GenomicExtractor):
-
-    def extract_read(self, read):
-        raise NotImplementedError()
-
-    @classmethod
-    def _read_input(cls, file_path):
-        for read in skbio_io.read(str(file_path), format='fasta',
-                                  constructor=DNASequence):
-            yield read
-
-    @classmethod
-    @contextmanager
-    def _open_out(cls, file_path):
-        with file_path.open('w') as file_:
-            yield file_
-
-    @classmethod
-    def _write_out(cls, sequence, fh):
-        skbio_io.write(sequence, into=fh, format='fasta')
 
 
 # --- Identifiers --- #
@@ -240,7 +210,6 @@ class InsertionIdentifier(object):
         bam_file = pysam.AlignmentFile(str(bam_path), 'rb')
 
         # Collect insertions from alignments.
-        insertions = []
         for ref_id in bam_file.references:
             alignments = bam_file.fetch(reference=ref_id)
             alignments = (aln for aln in alignments

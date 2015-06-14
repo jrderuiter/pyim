@@ -18,7 +18,7 @@ from pyim.alignment.vector import (ExactAligner, SswAligner, ChainedAligner,
                                    filter_score, filter_end_match)
 from pyim.cluster import cluster_frame_merged
 
-from ._base import (Pipeline, FastaGenomicExtractor,
+from ._base import (Pipeline, ParallelGenomicExtractor,
                     InsertionIdentifier, genomic_distance)
 
 
@@ -125,7 +125,7 @@ class ShearSplinkStatus(Enum):
     proper_read = 7
 
 
-class ShearSplinkExtractor(FastaGenomicExtractor):
+class ShearSplinkExtractor(ParallelGenomicExtractor):
 
     STATUS = ShearSplinkStatus
 

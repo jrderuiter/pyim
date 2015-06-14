@@ -1,23 +1,22 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
+# noinspection PyUnresolvedReferences
 from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)
 
-from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from skbio import DNASequence, SequenceCollection
-from tkgeno.io import FastqFile
 
 from pyim.alignment.genome import Bowtie2Aligner
 from pyim.alignment.vector import ExactAligner
 from pyim.cluster import cluster_frame_merged
 
-from ._base import (Pipeline, FastqGenomicExtractor,
+from ._base import (Pipeline, GenomicExtractor,
                     InsertionIdentifier, genomic_distance)
 
 
@@ -31,9 +30,10 @@ class LamPcrPipeline(Pipeline):
         parser.add_argument('output_dir', type=Path)
         parser.add_argument('reference', type=Path)
 
-        parser.add_argument('--contaminants', type=Path)
-        parser.add_argument('--barcode_sequences', type=Path)
-        parser.add_argument('--barcode_map', type=Path)
+        parser.add_argument('--contaminants', type=Path, default=None)
+        parser.add_argument('--transposon', type=Path, default=None)
+        parser.add_argument('--barcodes', type=Path, default=None)
+        parser.add_argument('--barcode_map', type=Path, default=None)
         parser.add_argument('--min_genomic_length', type=int, default=15)
 
         parser.add_argument('--min_depth', type=int, default=2)
@@ -46,6 +46,10 @@ class LamPcrPipeline(Pipeline):
     @classmethod
     def from_args(cls, args):
 
+        # Read transposon sequence.
+        transposon_seq = DNASequence.read(str(args['transposon'])) \
+            if args['transposon'] is not None else None
+
         # Read contaminant sequences.
         contaminant_seqs = SequenceCollection.read(
             str(args['contaminants']), constructor=DNASequence) \
@@ -53,12 +57,12 @@ class LamPcrPipeline(Pipeline):
 
         # Read barcode sequences if supplied.
         barcode_seqs = SequenceCollection.read(
-            str(args['barcode_sequences']), constructor=DNASequence) \
-            if args['barcode_sequences'] is not None else None
+            str(args['barcodes']), constructor=DNASequence) \
+            if args['barcodes'] is not None else None
 
         # Read barcode map if supplied.
         if barcode_seqs is not None and args['barcode_map'] is not None:
-            barcode_map = pd.read_csv(args['barcode_map'], sep='\t')
+            barcode_map = pd.read_csv(str(args['barcode_map']), sep='\t')
             barcode_map = dict(zip(barcode_map['barcode'],
                                    barcode_map['sample']))
         else:
@@ -66,10 +70,10 @@ class LamPcrPipeline(Pipeline):
 
         # Setup extractor and identifier for pipeline.
         extractor = LamPcrExtractor(
+            transposon_sequence=transposon_seq,
             barcode_sequences=barcode_seqs,
             barcode_map=barcode_map,
             contaminant_sequences=contaminant_seqs,
-            # threads=args['threads'],
             min_length=args['min_genomic_length'])
 
         aligner = Bowtie2Aligner(reference=args['reference'],
@@ -87,19 +91,27 @@ class LamPcrStatus(Enum):
     contaminant = 1
     no_barcode = 2
     duplicate_barcode = 3
-    too_short = 4
-    proper_read = 5
+    no_transposon = 4
+    too_short = 5
+    proper_read = 6
 
 
-class LamPcrExtractor(FastqGenomicExtractor):
+class LamPcrExtractor(GenomicExtractor):
+
+    DEFAULT_IN_FORMAT = 'faster_fastq'
+    DEFAULT_OUT_FORMAT = 'faster_fastq'
 
     STATUS = LamPcrStatus
 
-    def __init__(self, barcode_sequences=None, barcode_map=None,
+    def __init__(self, transposon_sequence=None,
+                 barcode_sequences=None, barcode_map=None,
                  contaminant_sequences=None, min_length=1,
                  threads=1, chunk_size=1000):
         super().__init__(min_length=min_length, threads=threads,
                          chunk_size=chunk_size)
+
+        self._transposon_sequence = transposon_sequence
+        self._transposon_aligner = ExactAligner(try_reverse=False)
 
         self._barcode_aligner = ExactAligner(try_reverse=False)
         self._barcodes = barcode_sequences
@@ -117,6 +129,19 @@ class LamPcrExtractor(FastqGenomicExtractor):
             if contaminant_aln is not None:
                 return None, self.STATUS.contaminant
 
+        # Check for a transposon sequence if specified.
+        tr_aln = None
+
+        if self._transposon_sequence is not None:
+            tr_aln = self._transposon_aligner.align(
+                self._transposon_sequence, read)
+
+            if tr_aln is None:
+                return None, self.STATUS.no_transposon
+
+        # Check for barcode sequences if specified.
+        bc_aln, barcode = None, None
+
         if self._barcodes is not None:
             try:
                 bc_aln = self._barcode_aligner.align_multiple(
@@ -126,39 +151,26 @@ class LamPcrExtractor(FastqGenomicExtractor):
 
             if bc_aln is None:
                 return None, self.STATUS.no_barcode
-            else:
-                # Extract genomic sequence.
-                # TODO: check extraction for correctness.
-                genomic = read[bc_aln.target_end:]
 
-                # Lookup barcode.
-                barcode = bc_aln.query_id
-                if self._barcode_map is not None:
-                    barcode = self._barcode_map[barcode]
+            # Lookup barcode.
+            barcode = bc_aln.query_id
+            if self._barcode_map is not None:
+                barcode = self._barcode_map[barcode]
+
+        # Extract the genomic sequence.
+        if tr_aln is not None:
+            genomic = read[tr_aln.target_end:]
+        elif bc_aln is not None:
+            genomic = read[bc_aln.target_end:]
         else:
-            genomic, barcode = read, None
+            genomic = read
 
+        # Check for minimum length.
         if len(genomic) < self._min_length:
             return None, self.STATUS.too_short
-        else:
-            return (read, barcode), self.STATUS.proper_read
 
-    @classmethod
-    def _read_input(cls, file_path):
-        with FastqFile.open(file_path) as file_:
-            for i, read in enumerate(file_):
-                if i % 100000 == 0 and i > 0:
-                    print('Processed {} reads'.format(i))
-                yield read
-
-    @classmethod
-    @contextmanager
-    def _open_out(cls, file_path):
-        if file_path.suffixes[-1] == '.gz':
-            file_path = file_path.with_suffix('')
-
-        with FastqFile.open(file_path, 'wt') as file_:
-            yield file_
+        # Return read, barcode and alignment status.
+        return (read, barcode), self.STATUS.proper_read
 
 
 class LamPcrIdentifier(InsertionIdentifier):
