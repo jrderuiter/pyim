@@ -1,6 +1,8 @@
 __author__ = 'Julian'
 
 import pandas as pd
+
+import readline
 from rpy2 import robjects
 
 from tkgeno.util.rpy2 import importr, pandas_to_dataframe, dataframe_to_pandas
