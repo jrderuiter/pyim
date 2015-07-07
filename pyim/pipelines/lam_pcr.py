@@ -76,7 +76,7 @@ class LamPcrPipeline(Pipeline):
             contaminant_sequences=contaminant_seqs,
             min_length=args['min_genomic_length'])
 
-        aligner = Bowtie2Aligner(reference=args['reference'],
+        aligner = Bowtie2Aligner(reference=args['reference'], bam_output=True,
                                  local=True, threads=args['threads'])
 
         identifier = LamPcrIdentifier(min_mapq=args['min_mapq'],
@@ -98,8 +98,8 @@ class LamPcrStatus(Enum):
 
 class LamPcrExtractor(GenomicExtractor):
 
-    DEFAULT_IN_FORMAT = 'faster_fastq'
-    DEFAULT_OUT_FORMAT = 'faster_fastq'
+    DEFAULT_IN_FORMAT = 'fastq'
+    DEFAULT_OUT_FORMAT = 'fastq'
 
     STATUS = LamPcrStatus
 
@@ -186,7 +186,7 @@ class LamPcrIdentifier(InsertionIdentifier):
         insertions = []
 
         groups = self._group_by_position_bam(
-            alignment_path, min_mapq=self._min_mapq)
+            alignment_path, min_mapq=self._min_mapq, barcode_map=barcode_map)
         for (ref_id, pos, strand, bc), alns in groups:
             # Determine depth as the number of reads at this position.
             depth = len(alns)

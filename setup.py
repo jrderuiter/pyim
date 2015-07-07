@@ -26,7 +26,8 @@ setup(
         'pyim-annotate = pyim.main.annotate:main',
         'pyim-cis = pyim.main.cis:main',
         'pyim-plot = pyim.main.plot:main',
-        'pyim-gff = pyim.main.gff:main'
+        'pyim-gff = pyim.main.gff:main',
+        'pyim-split = pyim.main.split:main'
     ]},
     extras_require={'test': 'pytest'},
     zip_safe=True,

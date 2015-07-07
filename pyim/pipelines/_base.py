@@ -58,44 +58,50 @@ class Pipeline(object):
         if not output_dir.exists():
             output_dir.mkdir()
 
-        if input_path.suffix not in {'.bam', '.sam'}:
-            genomic_path = output_dir / ('genomic' +
-                                         ''.join(input_path.suffixes))
-            barcode_path = output_dir / 'genomic.barcodes.txt'
+        # if input_path.suffix not in {'.bam', '.sam'}:
+        #     genomic_path = output_dir / ('genomic' +
+        #                                  ''.join(input_path.suffixes))
+        #     barcode_path = output_dir / 'genomic.barcodes.txt'
+        #
+        #     # Extract genomic reads from input.
+        #     logger.info('Extracting genomic sequences from reads')
+        #
+        #     _, barcodes = self._extractor.extract_file(
+        #         input_path=input_path, output_path=genomic_path)
+        #
+        #     # Log statistics.
+        #     total_reads = sum(self._extractor.stats.values())
+        #
+        #     logger.info('- Processed {} reads'.format(total_reads))
+        #     logger.info('- Read statistics')
+        #     for status in self._extractor.STATUS:
+        #         count = self._extractor.stats[status]
+        #         logger.info('\t- {}: {} ({:3.2f}%)'
+        #                     .format(status.name, count,
+        #                             (count / total_reads) * 100))
+        #
+        #     # Write out barcodes as frame.
+        #     barcode_frame = pd.DataFrame.from_records(
+        #         iter(barcodes.items()), columns=['read_id', 'barcode'])
+        #     barcode_frame.to_csv(
+        #         str(barcode_path), sep=native_str('\t'), index=False)
+        #
+        #     # Align to reference genome.
+        #     logger.info('Aligning genomic sequences to reference')
+        #     logger.info('- Using {} aligner (v{})'.format(
+        #         self._aligner.__class__.__name__.replace('Aligner', ''),
+        #         self._aligner.get_version()))
+        #
+        #     aln_path = self._aligner.align_file(
+        #         file=genomic_path, output_dir=output_dir)
+        # else:
+        #     aln_path, barcodes = input_path, None
 
-            # Extract genomic reads from input.
-            logger.info('Extracting genomic sequences from reads')
+        aln_path = output_dir / 'alignment.bam'
 
-            _, barcodes = self._extractor.extract_file(
-                input_path=input_path, output_path=genomic_path)
-
-            # Log statistics.
-            total_reads = sum(self._extractor.stats.values())
-
-            logger.info('- Processed {} reads'.format(total_reads))
-            logger.info('- Read statistics')
-            for status in self._extractor.STATUS:
-                count = self._extractor.stats[status]
-                logger.info('\t- {}: {} ({:3.2f}%)'
-                            .format(status.name, count,
-                                    (count / total_reads) * 100))
-
-            # Write out barcodes as frame.
-            barcode_frame = pd.DataFrame.from_records(
-                iter(barcodes.items()), columns=['read_id', 'barcode'])
-            barcode_frame.to_csv(
-                str(barcode_path), sep=native_str('\t'), index=False)
-
-            # Align to reference genome.
-            logger.info('Aligning genomic sequences to reference')
-            logger.info('- Using {} aligner (v{})'.format(
-                self._aligner.__class__.__name__.replace('Aligner', ''),
-                self._aligner.get_version()))
-
-            aln_path = self._aligner.align_file(
-                file=genomic_path, output_dir=output_dir)
-        else:
-            aln_path, barcodes = input_path, None
+        barcode_map = pd.read_csv(
+            str(output_dir / 'genomic.barcodes.txt'), sep='\t')
+        barcodes = dict(zip(barcode_map['read_id'], barcode_map['barcode']))
 
         # Identify transposon insertions.
         logger.info('Identifying insertions from alignment')
