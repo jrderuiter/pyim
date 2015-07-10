@@ -23,7 +23,7 @@ CHR_MAP = dict(zip(
 
 class KcRbmAnnotator(Annotator):
 
-    def __init__(self, reference, system):
+    def __init__(self, reference, system, closest=False):
         super().__init__()
 
         if system not in {'SB'}:
@@ -34,6 +34,7 @@ class KcRbmAnnotator(Annotator):
 
         self._reference = reference
         self._system = system
+        self._closest = closest
 
     @classmethod
     def configure_argparser(cls, subparsers, name='kcrbm'):
@@ -44,18 +45,24 @@ class KcRbmAnnotator(Annotator):
 
         parser.add_argument('--reference', default='mm10')
         parser.add_argument('--system', default='SB')
+        parser.add_argument('--closest', default=False, action='store_true')
 
         return parser
-
-    @classmethod
-    def from_args(cls, args):
-        return cls(reference=args['reference'], system=args['system'])
 
     def annotate(self, frame, type_='gene'):
         kcrbm_ins = self._convert_to_kcrbm_frame(frame)
         kcrbm_result = self._run_kcrbm(kcrbm_ins, method='genes')
 
         gene_mapping = self._parse_gene_result(kcrbm_result)
+
+        if self._closest:
+            closest = lambda x: x.ix[
+                x.gene_distance == x.gene_distance.abs().min()]
+
+            gene_mapping = (gene_mapping.groupby('insertion_id')
+                            .apply(closest)
+                            .reset_index(drop=True))
+
         return pd.merge(frame, gene_mapping, on='insertion_id')
 
     @staticmethod
@@ -97,10 +104,16 @@ class KcRbmAnnotator(Annotator):
     @staticmethod
     def _parse_gene_result(result):
         result = result.ix[result['ensid'].astype(str) != 'NA']
-        return pd.DataFrame({'insertion_id': result['ins_id'],
-                             'gene_id': result['ensid'],
-                             'mechanism': result['mechanism']},
-                            columns=['insertion_id', 'gene_id', 'mechanism'])
+
+        gene_distance = result[['d2gss', 'd2gts']].abs().min(axis=1).astype(int)
+        gene_distance.ix[result.mechanism.str.startswith('u')] *= -1
+
+        return pd.DataFrame({
+            'insertion_id': result['ins_id'],
+            'gene_id': result['ensid'],
+            'distance': gene_distance,
+            'mechanism': result['mechanism']},
+            columns=['insertion_id', 'gene_id', 'distance', 'mechanism'])
 
     @staticmethod
     def _load_genome(genome):
