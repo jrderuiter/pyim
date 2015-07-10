@@ -8,7 +8,9 @@ from future.utils import native_str
 from argparse import ArgumentParser
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+from toolz import curry
 
 from pyim.cis.cimpl import cimpl, get_cis, get_cis_mapping
 
@@ -26,6 +28,8 @@ def setup_parser():
     parser.add_argument('--genome', choices={'mm10'}, default='mm10')
     parser.add_argument('--chromosomes', nargs='+', default=None)
     parser.add_argument('--scales', nargs='+', type=int, default=30000)
+
+    parser.add_argument('--strand_homogeneity', type=float, default=0.75)
 
     parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--iterations', type=int, default=1000)
@@ -52,12 +56,45 @@ def main():
     cis = get_cis(cimpl_obj, alpha=args.alpha, mul_test=True)
     cis_mapping = get_cis_mapping(cimpl_obj, cis_frame=cis)
 
+    # Annotate insertions with cis mapping.
     ins_annotated = pd.merge(ins_frame, cis_mapping, on='insertion_id')
+
+    # Determine strand of cis sites.
+    strand_func = curry(_strandedness, min_homogeneity=args.strand_homogeneity)
+    cis_strand = ins_annotated.groupby('cis_id').apply(strand_func)
+
+    # Merge strand information with cis sites.
+    cis = pd.merge(cis, cis_strand.reset_index(), on='cis_id')
+
+    # Rename and reshuffle cis columns.
+    cis = cis.rename(columns={'peak_location': 'location',
+                              'peak_height': 'height'})
+    cis = cis[['cis_id', 'seqname', 'location', 'strand', 'scale',
+               'n_insertions', 'p_value', 'start', 'end', 'height', 'width',
+               'strand_mean', 'strand_homogeneity']]
 
     # Write out outputs.
     cis.to_csv(str(args.output.with_suffix('.sites.txt')),
                sep=native_str('\t'), index=False)
     ins_annotated.to_csv(str(args.output), sep=native_str('\t'), index=False)
+
+
+def _strandedness(insertions, min_homogeneity):
+    strand_mean = insertions.strand.mean()
+    strand = int(np.sign(strand_mean))
+
+    if strand != 0:
+        homogeneity = (insertions.strand == strand).sum() / len(insertions)
+    else:
+        homogeneity = 0.5
+
+    if homogeneity < min_homogeneity:
+        strand = 0
+
+    return pd.Series(dict(strand=strand,
+                          strand_mean=strand_mean,
+                          strand_homogeneity=homogeneity))
+
 
 
 if __name__ == '__main__':
