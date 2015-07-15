@@ -17,7 +17,9 @@ def setup_parser():
     parser.add_argument('insertions', nargs='+', type=Path)
     parser.add_argument('output', type=Path)
 
-    parser.add_argument('--names', nargs='+', required=False, default=None)
+    parser.add_argument('--names', nargs='+', default=None)
+    parser.add_argument('--samples', nargs='+', default=None)
+    parser.add_argument('--complement', default=False, action='store_true')
 
     return parser
 
@@ -53,8 +55,24 @@ def main():
 
         ins_frames.append(frame)
 
-    # Merge and write output.
+    # Merge frames.
     merged = pd.concat(ins_frames, ignore_index=True)
+
+    # Filter samples if needed.
+    if args.samples is not None:
+        merged_samples = set(merged['sample'])
+        for sample in args.samples:
+            if sample not in merged_samples:
+                print('WARNING: unknown sample {}'.format(sample))
+
+        mask = merged['sample'].isin(set(args.samples))
+
+        if not args.complement:
+            merged = merged.ix[mask]
+        else:
+            merged = merged.ix[~mask]
+
+    # Write output.
     merged.to_csv(str(args.output), sep=native_str('\t'), index=False)
 
 
