@@ -66,7 +66,7 @@ class VectorAligner(object):
         else:
             if how == 'unique':
                 raise ValueError('Multiple matching queries for target {}'
-                                 .format(target.id))
+                                 .format(target.metadata['id']))
             elif how == 'any':
                 return alignments[0]
             else:
@@ -94,17 +94,17 @@ class ExactAligner(VectorAligner):
         # Note that this alignment returns the first occurrence it finds,
         # later occurrences will not be found and are not checked for.
         try:
-            index = target.sequence.index(query.sequence)
+            index = str(target).index(str(query))
         except ValueError:
             return None
         else:
             q_len = len(query)
 
             return VectorAlignment(
-                query_id=query.id, query_start=0, query_end=q_len,
-                query_len=q_len, target_id=target.id, target_start=index,
-                target_end=index + q_len, target_strand=query_ori,
-                target_len=len(target), type='exact',
+                query_id=query.metadata['id'], query_start=0, query_end=q_len,
+                query_len=q_len, target_id=target.metadata['id'],
+                target_start=index, target_end=index + q_len,
+                target_strand=query_ori, target_len=len(target), type='exact',
                 identity=1.0, coverage=1.0)
 
 
@@ -140,7 +140,7 @@ class SswAligner(VectorAligner):
         return alignment
 
     def _align_ssw(self, query, target, query_ori):
-        ssw_aln = local_pairwise_align_ssw(target.sequence, query.sequence)
+        ssw_aln = local_pairwise_align_ssw(target, query)
 
         # Extract positions.
         pos = ssw_aln.start_end_positions()
@@ -154,11 +154,12 @@ class SswAligner(VectorAligner):
 
         # Calculate basic metrics.
         coverage = (q_end - q_start) / float(len(query))
-        identity = ssw_aln[0].fraction_same(ssw_aln[1])
+        identity = 1.0 - ssw_aln[0].distance(ssw_aln[1])
 
         aln = VectorAlignment(
-            query_id=query.id, query_start=q_start, query_end=q_end,
-            query_len=len(query), target_id=target.id, target_start=t_start,
+            query_id=query.metadata['id'], query_start=q_start,
+            query_end=q_end, query_len=len(query),
+            target_id=target.metadata['id'], target_start=t_start,
             target_end=t_end, target_strand=query_ori, target_len=len(target),
             type='ssw', identity=identity, coverage=coverage)
 

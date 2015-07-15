@@ -56,14 +56,14 @@ class KcRbmAnnotator(Annotator):
         gene_mapping = self._parse_gene_result(kcrbm_result)
 
         if self._closest:
-            closest = lambda x: x.ix[
-                x.gene_distance == x.gene_distance.abs().min()]
+            def closest(x):
+                return x.ix[x['distance'] == x['distance'].abs().min()]
 
             gene_mapping = (gene_mapping.groupby('insertion_id')
                             .apply(closest)
                             .reset_index(drop=True))
 
-        return pd.merge(frame, gene_mapping, on='insertion_id')
+        return pd.merge(frame, gene_mapping, on='insertion_id', how='left')
 
     @staticmethod
     def _convert_to_kcrbm_frame(frame):
@@ -105,7 +105,8 @@ class KcRbmAnnotator(Annotator):
     def _parse_gene_result(result):
         result = result.ix[result['ensid'].astype(str) != 'NA']
 
-        gene_distance = result[['d2gss', 'd2gts']].abs().min(axis=1).astype(int)
+        gene_distance = result[['d2gss', 'd2gts']]\
+            .abs().min(axis=1).astype(int)
         gene_distance.ix[result.mechanism.str.startswith('u')] *= -1
 
         return pd.DataFrame({

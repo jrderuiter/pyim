@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from skbio import DNASequence, SequenceCollection
+from skbio import DNA, SequenceCollection
 
 from pyim.alignment.genome import Bowtie2Aligner
 from pyim.alignment.vector import (ExactAligner, SswAligner, ChainedAligner,
@@ -48,16 +48,16 @@ class ShearSplinkPipeline(Pipeline):
     @classmethod
     def from_args(cls, args):
         # Read transposon, barcode and linker sequences.
-        transposon_seq = DNASequence.read(str(args['transposon']))
+        transposon_seq = DNA.read(str(args['transposon']))
 
-        linker_seq = DNASequence.read(str(args['linker']))
+        linker_seq = DNA.read(str(args['linker']))
 
         barcode_seqs = SequenceCollection.read(
-            str(args['barcodes']), constructor=DNASequence)
+            str(args['barcodes']), constructor=DNA)
 
         # Read contaminants if supplied.
         contaminant_seqs = SequenceCollection.read(
-            str(args['contaminants']), constructor=DNASequence) \
+            str(args['contaminants']), constructor=DNA) \
             if args['contaminants'] is not None else None
 
         # Read barcode map if supplied.
@@ -279,27 +279,27 @@ class ShearSplinkIdentifier(InsertionIdentifier):
             return frame.iloc[0]
         else:
             # Check if merging is sane.
-            assert len(set(frame.seqname)) == 1
-            assert len(set(frame.strand)) == 1
-            assert len(set(frame.sample.astype(str))) == 1
+            assert len(set(frame['seqname'])) == 1
+            assert len(set(frame['strand'])) == 1
+            assert len(set(frame['sample'].astype(str))) == 1
 
             # Pick first row as reference for shared fields.
             ref = frame.iloc[0]
 
             # Calculate new location as mean, biased towards
             # insertions with more weight (a higher ULP).
-            weighted_loc = np.average(
-                frame.location, weights=frame.depth_unique)
+            weighted_loc = np.average(frame.location,
+                                      weights=frame['depth_unique'])
             weighted_loc = int(round(weighted_loc))
 
             return pd.Series(
                 {'insertion_id': np.nan,
-                 'seqname': ref.seqname,
+                 'seqname': ref['seqname'],
                  'location': weighted_loc,
-                 'strand': ref.strand,
-                 'sample': ref.sample,
-                 'depth': frame.depth.sum(),
-                 'depth_unique': frame.depth_unique.sum()},
+                 'strand': ref['strand'],
+                 'sample': ref['sample'],
+                 'depth': frame['depth'].sum(),
+                 'depth_unique': frame['depth_unique'].sum()},
                 index=ref.index)
 
     @staticmethod

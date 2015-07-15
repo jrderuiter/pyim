@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from skbio import DNASequence, SequenceCollection
+from skbio import DNA, SequenceCollection
 
 from pyim.alignment.genome import Bowtie2Aligner
 from pyim.alignment.vector import ExactAligner
@@ -47,17 +47,17 @@ class LamPcrPipeline(Pipeline):
     def from_args(cls, args):
 
         # Read transposon sequence.
-        transposon_seq = DNASequence.read(str(args['transposon'])) \
+        transposon_seq = DNA.read(str(args['transposon'])) \
             if args['transposon'] is not None else None
 
         # Read contaminant sequences.
         contaminant_seqs = SequenceCollection.read(
-            str(args['contaminants']), constructor=DNASequence) \
+            str(args['contaminants']), constructor=DNA) \
             if args['contaminants'] is not None else None
 
         # Read barcode sequences if supplied.
         barcode_seqs = SequenceCollection.read(
-            str(args['barcodes']), constructor=DNASequence) \
+            str(args['barcodes']), constructor=DNA) \
             if args['barcodes'] is not None else None
 
         # Read barcode map if supplied.
@@ -216,7 +216,8 @@ class LamPcrIdentifier(InsertionIdentifier):
                 t=self._merge_distance)
 
         # Filter by min_depth.
-        insertions = insertions.ix[insertions['depth_unique'] > self._min_depth]
+        insertions = insertions.ix[
+            insertions['depth_unique'] > self._min_depth]
 
         # Sort by coordinate and add identifiers.
         insertions = insertions.sort(['seqname', 'location'])

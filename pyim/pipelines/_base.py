@@ -15,10 +15,10 @@ import pysam
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist
+
+from skbio import DNA
 from skbio import io as skbio_io
 
-# noinspection PyUnresolvedReferences
-from pyim.io import fastq
 from pyim.util import PrioritySet
 
 logging.basicConfig(
@@ -58,46 +58,44 @@ class Pipeline(object):
         if not output_dir.exists():
             output_dir.mkdir()
 
-        # if input_path.suffix not in {'.bam', '.sam'}:
-        #     genomic_path = output_dir / ('genomic' +
-        #                                  ''.join(input_path.suffixes))
-        #     barcode_path = output_dir / 'genomic.barcodes.txt'
-        #
-        #     # Extract genomic reads from input.
-        #     logger.info('Extracting genomic sequences from reads')
-        #
-        #     _, barcodes = self._extractor.extract_file(
-        #         input_path=input_path, output_path=genomic_path)
-        #
-        #     # Log statistics.
-        #     total_reads = sum(self._extractor.stats.values())
-        #
-        #     logger.info('- Processed {} reads'.format(total_reads))
-        #     logger.info('- Read statistics')
-        #     for status in self._extractor.STATUS:
-        #         count = self._extractor.stats[status]
-        #         logger.info('\t- {}: {} ({:3.2f}%)'
-        #                     .format(status.name, count,
-        #                             (count / total_reads) * 100))
-        #
-        #     # Write out barcodes as frame.
-        #     barcode_frame = pd.DataFrame.from_records(
-        #         iter(barcodes.items()), columns=['read_id', 'barcode'])
-        #     barcode_frame.to_csv(
-        #         str(barcode_path), sep=native_str('\t'), index=False)
-        #
-        #     # Align to reference genome.
-        #     logger.info('Aligning genomic sequences to reference')
-        #     logger.info('- Using {} aligner (v{})'.format(
-        #         self._aligner.__class__.__name__.replace('Aligner', ''),
-        #         self._aligner.get_version()))
-        #
-        #     aln_path = self._aligner.align_file(
-        #         file=genomic_path, output_dir=output_dir)
-        # else:
-        #     aln_path, barcodes = input_path, None
+        if input_path.suffix not in {'.bam', '.sam'}:
+            genomic_path = output_dir / ('genomic' +
+                                         ''.join(input_path.suffixes))
+            barcode_path = output_dir / 'genomic.barcodes.txt'
 
-        aln_path = output_dir / 'alignment.bam'
+            # Extract genomic reads from input.
+            logger.info('Extracting genomic sequences from reads')
+
+            _, barcodes = self._extractor.extract_file(
+                input_path=input_path, output_path=genomic_path)
+
+            # Log statistics.
+            total_reads = sum(self._extractor.stats.values())
+
+            logger.info('- Processed {} reads'.format(total_reads))
+            logger.info('- Read statistics')
+            for status in self._extractor.STATUS:
+                count = self._extractor.stats[status]
+                logger.info('\t- {}: {} ({:3.2f}%)'
+                            .format(status.name, count,
+                                    (count / total_reads) * 100))
+
+            # Write out barcodes as frame.
+            barcode_frame = pd.DataFrame.from_records(
+                iter(barcodes.items()), columns=['read_id', 'barcode'])
+            barcode_frame.to_csv(
+                str(barcode_path), sep=native_str('\t'), index=False)
+
+            # Align to reference genome.
+            logger.info('Aligning genomic sequences to reference')
+            logger.info('- Using {} aligner (v{})'.format(
+                self._aligner.__class__.__name__.replace('Aligner', ''),
+                self._aligner.get_version()))
+
+            aln_path = self._aligner.align_file(
+                file=genomic_path, output_dir=output_dir)
+        else:
+            aln_path, barcodes = input_path, None
 
         barcode_map = pd.read_csv(
             str(output_dir / 'genomic.barcodes.txt'), sep='\t')
@@ -148,7 +146,8 @@ class GenomicExtractor(object):
     def extract_from_file(self, file_path, format=None):
         format = self.DEFAULT_IN_FORMAT if format is None else format
 
-        reads = skbio_io.read(str(file_path), format=format)
+        reads = skbio_io.read(
+            str(file_path), format=format, constructor=DNA)
         for genomic, barcode in self.extract(reads):
                 yield genomic, barcode
 
@@ -158,7 +157,7 @@ class GenomicExtractor(object):
         barcodes = {}
         with open(str(file_path), 'w') as file_:
             for genomic, barcode in self.extract(reads):
-                barcodes[genomic.id] = barcode
+                barcodes[genomic.metadata['id']] = barcode
                 skbio_io.write(obj=genomic, format=format, into=file_)
 
         return file_path, barcodes
@@ -169,7 +168,8 @@ class GenomicExtractor(object):
         format_out = self.DEFAULT_OUT_FORMAT \
             if format_out is None else format_out
 
-        reads = skbio_io.read(str(input_path), format=format_in)
+        reads = skbio_io.read(
+            str(input_path), format=format_in, constructor=DNA)
         return self.extract_to_file(reads, output_path, format=format_out)
 
 
