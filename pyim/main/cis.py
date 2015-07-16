@@ -24,6 +24,8 @@ def setup_parser():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--pattern', default=None)
     group.add_argument('--system', choices={'SB'}, default=None)
+    group.add_argument('--lhc_method', choices={'none', 'exclude'},
+                       default='exclude')
 
     parser.add_argument('--genome', choices={'mm10'}, default='mm10')
     parser.add_argument('--chromosomes', nargs='+', default=None)
@@ -49,8 +51,9 @@ def main():
     # Run cimpl.
     cimpl_obj = cimpl(ins_frame, scales=args.scales, genome=args.genome,
                       system=args.system, pattern=args.pattern,
-                      chromosomes=args.chromosomes, iterations=args.iterations,
-                      threads=args.threads, verbose=args.verbose)
+                      lhc_method=args.lhc_method, chromosomes=args.chromosomes,
+                      iterations=args.iterations, threads=args.threads,
+                      verbose=args.verbose)
 
     # Extract cis and cis mapping from object.
     cis = get_cis(cimpl_obj, alpha=args.alpha, mul_test=True)

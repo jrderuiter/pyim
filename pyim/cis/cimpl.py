@@ -1,5 +1,3 @@
-__author__ = 'Julian'
-
 import pandas as pd
 
 import readline
