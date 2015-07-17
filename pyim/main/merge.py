@@ -50,8 +50,9 @@ def main():
         samples = samples.union(frame_samples)
 
         # Augment ids to avoid duplicates in merged frame.
-        frame['insertion_id'] = ['{}.{}'.format(name, id_)
-                                 for id_ in frame['insertion_id']]
+        if name != '':
+            frame['insertion_id'] = ['{}.{}'.format(name, id_)
+                                     for id_ in frame['insertion_id']]
 
         ins_frames.append(frame)
 
