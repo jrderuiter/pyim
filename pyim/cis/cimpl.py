@@ -40,10 +40,17 @@ def cimpl(insertions, scales, genome, system=None, pattern=None,
     # Load genome object from R.
     genome_obj = _load_genome(genome)
 
+    # Convert insertions to cimpl format.
+    cimpl_frame = _convert_to_cimpl_dataframe(insertions)
+
+    # Check if contig_depth is present (if doing hop exclusion).
+    if lhc_method == 'exclude' and 'contig_depth' not in cimpl_frame:
+        raise ValueError('Insertion depth is needed for lhc exclusion')
+
     # Run CIMPL!
     cimpl_r = importr('cimpl')
     cimpl_obj = cimpl_r.doCimplAnalysis(
-        _convert_to_cimpl_dataframe(insertions),
+        pandas_to_dataframe(cimpl_frame),
         scales=scales, n_iterations=iterations,
         lhc_method=lhc_method, threads=threads, BSgenome=genome_obj,
         chromosomes=chromosomes, verbose=verbose, **extra_args)
@@ -57,10 +64,13 @@ def _convert_to_cimpl_dataframe(insertions):
                                     'location', 'sample']]
     cimpl_frame.columns = ['id', 'chr', 'location', 'sampleID']
 
+    if 'depth_unique' in insertions:
+        cimpl_frame['contig_depth'] = insertions['depth_unique']
+
     # Add 'chr' prefix to the chromosome names if needed.
     cimpl_frame['chr'] = _prefix_chromosomes(cimpl_frame['chr'])
 
-    return pandas_to_dataframe(cimpl_frame)
+    return cimpl_frame
 
 
 def _prefix_chromosomes(series, prefix='chr'):
