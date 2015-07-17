@@ -12,7 +12,7 @@ if not sys.version_info >= (3, ):
 
 setup(
     name='pyim',
-    version='0.4.2',
+    version='0.4.3',
     url='',
     author='Julian de Ruiter',
     author_email='j.r.deruiter@icloud.com',
