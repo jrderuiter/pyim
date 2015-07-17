@@ -24,8 +24,6 @@ def setup_parser():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--pattern', default=None)
     group.add_argument('--system', choices={'SB'}, default=None)
-    group.add_argument('--lhc_method', choices={'none', 'exclude'},
-                       default='exclude')
 
     parser.add_argument('--genome', choices={'mm10'}, default='mm10')
     parser.add_argument('--chromosomes', nargs='+', default=None)
@@ -35,6 +33,9 @@ def setup_parser():
 
     parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--iterations', type=int, default=1000)
+    parser.add_argument('--lhc_method', choices={'none', 'exclude'},
+                        default='exclude')
+
     parser.add_argument('--threads', type=int, default=1)
     parser.add_argument('--verbose', default=False, action='store_true')
 
