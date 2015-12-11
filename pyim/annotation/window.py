@@ -8,15 +8,12 @@ from collections import namedtuple
 from functools import lru_cache
 from pathlib import Path
 
-from toolz import pipe
-from toolz.curried import get, filter, map, valmap, valfilter
-
 import pandas as pd
 
 from tkgeno.io import GtfFile
 from tkgeno.util.pandas import reorder_columns
 
-from .base import Annotator, closest_genes
+from .base import Annotator, get_closest
 
 
 Window = namedtuple('Window', ['seqname', 'start', 'end', 'strand',
@@ -78,7 +75,7 @@ class WindowAnnotator(Annotator):
                             ignore_index=True)
 
         return results if self._closest is not None \
-            else closest_genes(frame, id_col=self._id_column)
+            else get_closest(frame, id_col=self._id_column)
 
     @staticmethod
     def _annotate_row(row, window, gtf, feature_type='gene'):

@@ -22,10 +22,11 @@ class Annotator(object):
         raise NotImplementedError()
 
 
-def closest_genes(frame, id_col='insertion_id', distance_col='distance'):
-    select_closest = lambda x: x.ix[
-        x[distance_col] == x[distance_col].abs().min()]
+def get_closest(frame, id_col='insertion_id', distance_col='distance'):
+    def _is_closest(x):
+        abs_dist = x[distance_col].abs()
+        return x.ix[abs_dist == abs_dist.min()]
 
     return (frame.groupby(id_col)
-            .apply(select_closest)
+            .apply(_is_closest)
             .reset_index(drop=True))

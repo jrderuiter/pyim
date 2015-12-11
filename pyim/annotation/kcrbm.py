@@ -13,7 +13,7 @@ from rpy2 import robjects
 
 from tkgeno.util.rpy2 import importr, pandas_to_dataframe, dataframe_to_pandas
 
-from .base import Annotator
+from .base import Annotator, get_closest
 
 CHR_MAP = dict(zip(
     list(map(str, range(1, 19+1))) + ['X', 'Y'],
@@ -56,12 +56,7 @@ class KcRbmAnnotator(Annotator):
         gene_mapping = self._parse_gene_result(kcrbm_result)
 
         if self._closest:
-            def closest(x):
-                return x.ix[x['distance'] == x['distance'].abs().min()]
-
-            gene_mapping = (gene_mapping.groupby('insertion_id')
-                            .apply(closest)
-                            .reset_index(drop=True))
+            gene_mapping = get_closest(gene_mapping)
 
         return pd.merge(frame, gene_mapping, on='insertion_id', how='left')
 

@@ -1,20 +1,20 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-from builtins import (ascii, bytes, chr, dict, filter, hex, input,
+from builtins import (ascii, bytes, chr, dict, hex, input,
                       int, map, next, oct, open, pow, range, round,
-                      str, super, zip)
+                      str, super, zip)  # filter
 
 from pathlib import Path
 
 import pandas as pd
 
 from toolz import curry, pipe, merge_with, keymap
-from toolz.curried import get, filter, map, valfilter, valmap
+from toolz.curried import filter, valfilter, valmap
 
 from tkgeno.io import GtfFile
 from tkgeno.util.pandas import reorder_columns
 
-from .base import Annotator, closest_genes
+from .base import Annotator, get_closest
 from .window import Window, apply_window, fetch_features, annotate_features
 
 
@@ -80,14 +80,15 @@ class RbmAnnotator(Annotator):
                             ignore_index=True)
 
         return results if not self._closest \
-            else closest_genes(results, id_col=self._id_column)
+            else get_closest(results, id_col=self._id_column)
 
     @staticmethod
     def _annotate_row(row, windows, gtf, feature_type='gene'):
         strand = row.strand if hasattr(row, 'strand') else None
 
         # Fetch features for orientation, or for the forward orientation.
-        apply_func = curry(apply_window, row.seqname, row.location, strand or 1)
+        apply_func = curry(apply_window, row.seqname,
+                           row.location, strand or 1)
         windows_fwd = valmap(apply_func, windows)
 
         features = fetch_features_windows(

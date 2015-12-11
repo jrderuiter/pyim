@@ -1,11 +1,9 @@
-__author__ = 'Julian'
-
 import sys
 
 from setuptools import setup, find_packages
 
 install_requires = ['future', 'numpy', 'scipy', 'pandas', 'pysam',
-                    'natsort', 'rpy2', 'scikit-bio', 'tkgeno', 'toolz']
+                    'natsort', 'rpy2', 'scikit-bio', 'toolz']
 
 if not sys.version_info >= (3, ):
     install_requires += ['pathlib']
