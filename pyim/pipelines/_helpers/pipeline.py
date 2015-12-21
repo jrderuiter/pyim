@@ -5,7 +5,10 @@ import skbio
 import toolz
 
 
-def print_stats(results):
+@toolz.curry
+def print_stats(results, logger=None, header=False):
+    print_ = print if logger is None else logger.info
+
     # Iterate over results, counting statuses.
     status_counts = collections.defaultdict(int)
 
@@ -14,12 +17,14 @@ def print_stats(results):
         yield result
 
     # We're done, so print frequencies!
-    print('\nExtract statistics:')
+    if header:
+        print_('Extraction stats:')
 
     total = sum(status_counts.values())
     for status, count in status_counts.items():
         percentage = (count / total) * 100
-        print('{:>18}: {:>8} ({:05.2f}%)'.format(status, count, percentage))
+        print_('{:>18}: {:>8} ({:05.2f}%)'
+               .format(status, count, percentage))
 
 
 @toolz.curry
