@@ -1,31 +1,29 @@
-import collections
-import itertools
+import os
 import operator
 from enum import Enum
 from os import path
 
 import pysam
-import numpy as np
 import pandas as pd
-from toolz import curry, map, pipe, merge_with
-from toolz.curried import filter
-
 import skbio
-from tqdm import tqdm
+import toolz
+import tqdm
+from toolz.curried import filter as curried_filter
 
 from pyim.alignment.bowtie2 import align as bowtie_align
 from pyim.alignment.vector import (align_exact, align_multiple,
                                    align_with_reverse, reverse_alignment)
-from pyim.util import count_lines
+from pyim.util import count_fasta_entries
 
-from pyim.pipelines._model import ExtractResult, Insertion
-from pyim.pipelines._helpers import (
-    print_stats, write_genomic_sequences, build_barcode_map,
-    chain_groupby, groupby_barcode,
-    groupby_reference_position)
+from ._model import ExtractResult
+from ._helpers.pipeline import (print_stats, build_barcode_map,
+                                write_genomic_sequences)
+from ._helpers.grouping import (chain_groupby, groupby_barcode,
+                                groupby_reference_position)
+from ._helpers.clustering import merge_within_distance
 
 
-# --- Register pipeline --- #
+# --- Pipeline register hook + main --- #
 
 def register(subparsers, name='shear_splink'):
     parser = subparsers.add_parser(name, help=name + ' help')
@@ -52,11 +50,6 @@ def register(subparsers, name='shear_splink'):
 
 
 def main(args):
-
-    # Setup input reads.
-    reads = tqdm(skbio.io.read(args.input, format='fasta'),
-                 total=count_lines(args.input) // 2, leave=True)
-
     # Read transposon, linker and barcode sequences.
     transposon = skbio.io.read(args.transposon, format='fasta', into=skbio.DNA)
     linker = skbio.io.read(args.linker, format='fasta', into=skbio.DNA)
@@ -76,52 +69,65 @@ def main(args):
     else:
         sample_map = None
 
+    # Create output_dir if it does not exist.
+    if not path.exists(args.output_dir):
+        os.mkdir(args.output_dir)
+
     # Run pipeline!
-    shear_splink(reads, transposon, linker, barcodes,
-                 args.bowtie_index, args.output_dir,
-                 contaminants=contaminants, sample_map=sample_map,
-                 min_genomic_length=args.min_genomic_length)
+    insertions = shear_splink(
+        args.input, transposon, linker, barcodes,
+        args.bowtie_index, args.output_dir,
+        contaminants=contaminants, sample_map=sample_map,
+        min_genomic_length=args.min_genomic_length)
+
+    # Write insertion output.
+    insertions.to_csv(path.join(args.output_dir, 'insertions.txt'),
+                      sep='\t', index=False)
 
 
 # --- Overall pipeline --- #
 
-def shear_splink(reads, transposon, linker, barcodes, bowtie_index, output_dir,
-                 contaminants=None, sample_map=None, min_genomic_length=15):
-    # seq1 = DNA('CACTGGCCACGCGAAGGTGC')
-    # seq2 = DNA('GACCACTGGCCACGCGAAGG').reverse_complement()
-    # seq3 = DNA('CGTTGGTCACTCTACCCACA')
+def shear_splink(read_path, transposon, linker, barcodes,
+                 bowtie_index, output_dir, contaminants=None,
+                 sample_map=None, min_genomic_length=15):
 
-    # transposon = DNA('TTTG', metadata=dict(id='transposon'))
-    # barcodes = [DNA('AAAT', metadata=dict(id='BC01')),
-    #            DNA('AAAA', metadata=dict(id='BC02'))]
-    # linker = DNA('CCCG', metadata=dict(id='linker'))
-
-    # genomic_path = '/Users/Julian/Scratch/pyim/functional/genomic.fasta.gz'
-    # barcode_path = '/Users/Julian/Scratch/pyim/functional/barcodes.txt'
-
-    # index_path = '/path/to/index'
-    # alignment_path = '/Users/Julian/Scratch/pyim/functional/alignment.bam'
-
+    # Determine paths for intermediates/outputs.
     genomic_path = path.join(output_dir, 'genomic.fna')
-    barcode_path = path.join(output_dir, 'barcodes.txt')
-    alignment_path = path.join(output_dir, 'alignment.bam')
+    barcode_path = path.join(output_dir, 'genomic.barcodes.txt')
+    alignment_base = path.join(output_dir, 'alignment')
+
+    # Log progress with progressbar.
+    reads = skbio.read(read_path, format='fasta')
+    reads = tqdm.tqdm(reads, total=count_fasta_entries(read_path),
+                      leave=True, ncols=80, desc='Test')
 
     # Extract genomic sequences and barcodes
-    _, barcode_map = extract_genomic(
+    _, barcode_frame = extract_genomic(
         reads, transposon=transposon, barcodes=barcodes,
         linker=linker, output_path=genomic_path,
         contaminants=contaminants, min_length=min_genomic_length)
-    barcode_map.to_csv(barcode_path, sep='\t', index=False)
+    barcode_frame.to_csv(barcode_path, sep='\t', index=False)
 
     # Align to reference with Bowtie2.
-    bowtie_align(genomic_path, bowtie_index, alignment_path,
-                 options={}, log=alignment_path + '.log')
+    aln_path = bowtie_align(genomic_path, bowtie_index, alignment_base,
+                            bam_output=True, options={'-f': True},
+                            log=alignment_base + '.log')
 
     # Identify insertions from alignment.
-    # insertions = identify_insertions(alignment_path, barcode_map=barcode_map)
-    # print(insertions)
+    barcode_map = dict(zip(barcode_frame['read_id'],
+                           barcode_frame['barcode']))
+    insertions = identify_insertions(aln_path, barcode_map=barcode_map)
 
-    # return insertions
+    # Cluster and merge close insertions
+    agg_funcs = {'depth': 'sum', 'depth_unique': 'sum'}
+    insertions = merge_within_distance(
+        insertions, max_dist=2000, agg_funcs=agg_funcs)
+
+    # Assign ids to insertions.
+    insertions['id'] = ['INS_{}'.format(i)
+                        for i in range(1, len(insertions) + 1)]
+
+    return insertions
 
 
 # --- Genomic sequence extraction --- #
@@ -142,7 +148,7 @@ def extract_genomic(reads, transposon, barcodes, linker, output_path,
     io_kwargs = io_kwargs or {}
 
     # Extract and write genomic sequences.
-    barcode_map = pipe(
+    barcode_map = toolz.pipe(
         reads,
         _extract_reads(transposon=transposon,
                        barcodes=barcodes,
@@ -150,8 +156,8 @@ def extract_genomic(reads, transposon, barcodes, linker, output_path,
                        contaminants=contaminants,
                        sample_map=sample_map),
         print_stats,
-        filter(lambda r: r.status == ShearSplinkStatus.proper_read),
-        filter(lambda r: len(r.genomic_sequence) >= min_length),
+        curried_filter(lambda r: r.status == ShearSplinkStatus.proper_read),
+        curried_filter(lambda r: len(r.genomic_sequence) >= min_length),
         write_genomic_sequences(file_path=output_path,
                                 format='fasta', **io_kwargs),
         build_barcode_map)
@@ -163,7 +169,7 @@ def extract_genomic(reads, transposon, barcodes, linker, output_path,
     return output_path, barcode_frame
 
 
-@curry
+@toolz.curry
 def _extract_reads(reads, transposon, barcodes, linker, contaminants=None,
                    transposon_func=None, barcode_func=None,
                    linker_func=None, sample_map=None):
@@ -192,11 +198,12 @@ def _extract_reads(reads, transposon, barcodes, linker, contaminants=None,
     linker_func = linker_func(query=linker)
 
     # Extract and return results.
-    extract_func = curry(_extract_read,
-                         transposon_func=transposon_func,
-                         barcode_func=barcode_func,
-                         linker_func=linker_func,
-                         contaminant_func=contaminant_func)
+    extract_func = toolz.curry(
+         _extract_read,
+         transposon_func=transposon_func,
+         barcode_func=barcode_func,
+         linker_func=linker_func,
+         contaminant_func=contaminant_func)
 
     for result in map(extract_func, reads):
         yield result
@@ -261,13 +268,13 @@ def _extract_read(
 # --- Insertion identification --- #
 
 def identify_insertions(alignment_path, barcode_map):
-
+    # Get alignments from bowtie.
     bam = pysam.AlignmentFile(alignment_path)
-    alns = bam.fetch(multiple_iterators=True)
+    alignments = bam.fetch(multiple_iterators=True)
 
     # Group alignments by barcode and position.
     aln_groups = chain_groupby(
-        alns,
+        alignments,
         [groupby_reference_position(alignment_file=bam),
          groupby_barcode(barcode_map=barcode_map)])
 
@@ -277,9 +284,6 @@ def identify_insertions(alignment_path, barcode_map):
          for info, alns in aln_groups) ,
         columns=['id', 'chrom', 'position', 'strand',
                  'barcode', 'depth', 'depth_unique'])
-
-    # Cluster and merge close insertions
-
 
     return insertions
 
@@ -296,31 +300,3 @@ def _alignments_to_insertion(info, alignments, id_=None):
     depth_unique = len(set(end_positions))
 
     return id_, ref, pos, strand, bc, depth, depth_unique
-
-    # metadata = dict(depth=depth, depth_unique=depth_unique)
-    #return Insertion(id=id_, seq_name=ref, location=pos, strand=strand,
-    #                 sample=bc, metadata=metadata)
-
-
-def group_insertions(insertions, distance):
-    # for insertion in insertions:
-    #   check if we have an insertion from this sample in our collection
-    #   if so, add to collection
-
-    # - When did we last see SAMPLE_X?
-    # - Which sample have we not seen within distance?
-    pass
-
-
-def merge_insertions(insertions):
-    # Summarize location as mean.
-    location = np.average([ins.location for ins in insertions])
-
-    # Merge metadata by summing depths.
-    metadata = merge_with(sum, *[ins.metadata for ins in insertions])
-
-    # Take first insertion as reference for other attributes.
-    ref = insertions[0]
-
-    return Insertion(id=None, seqname=ref.seqname, location=location,
-                     strand=ref.strand, sample=ref.sample, metadata=metadata)

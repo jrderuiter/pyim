@@ -6,51 +6,23 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 
 import argparse
 
-from pyim.pipelines.lam_pcr import LamPcrPipeline
-from pyim.pipelines.shear_splink import ShearSplinkPipeline
-
-PIPELINES = {
-    'lam_pcr': LamPcrPipeline,
-    'shear_splink': ShearSplinkPipeline
-}
+# from pyim.pipelines.lam_pcr import LamPcrPipeline
+from pyim.pipelines import shear_splink
 
 
-def setup_parser():
+def main():
+    # Setup main parser.
     parser = argparse.ArgumentParser(prog='pyim-align')
 
     subparsers = parser.add_subparsers(dest='pipeline')
     subparsers.required = True
 
-    for name, class_ in PIPELINES.items():
-        class_.configure_argparser(subparsers, name=name)
+    # Register pipelines.
+    shear_splink.register(subparsers)
 
-    return parser
-
-
-def main():
-    parser = setup_parser()
+    # Parse args and dispatch.
     args = parser.parse_args()
-
-    # Check if a sub-parser was chosen.
-    if args.pipeline is None:
-        raise ValueError('No pipeline was specified as sub-command (choose '
-                         'from {})' .format(', '.join(PIPELINES.keys())))
-
-    # Parse options and extract main input/output parameters.
-    arg_dict = vars(args)
-
-    pipeline_name = arg_dict.pop('pipeline')
-    input_path = arg_dict.pop('input')
-    output_path = arg_dict.pop('output_dir')
-
-    # Instantiate chosen pipeline and run!
-    try:
-        pipeline_class = PIPELINES[pipeline_name]
-    except KeyError:
-        raise ValueError('Pipeline \'{}\' does not exist'.format(pipeline_name))
-    else:
-        pipeline = pipeline_class.from_args(arg_dict)
-        pipeline.run(input_path, output_path)
+    args.main(args)
 
 
 if __name__ == '__main__':

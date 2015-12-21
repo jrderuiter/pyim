@@ -2,52 +2,42 @@ import collections
 import itertools
 import operator
 
-import skbio
-from toolz import curry
-
-from pyim.util import PrioritySet
+import heapq
+import toolz
 
 
-def print_stats(results):
-    # Iterate over results, counting statuses.
-    status_counts = collections.defaultdict(int)
+class PrioritySet(object):
 
-    for result in results:
-        status_counts[result.status.name] += 1
-        yield result
+    def __init__(self):
+        self._heap = []
+        self._set = set()
 
-    # We're done, so print frequencies!
-    print('\nExtract statistics:')
+    def push(self, item, priority):
+        if item not in self._set:
+            heapq.heappush(self._heap, (priority, item))
+            self._set.add(item)
 
-    total = sum(status_counts.values())
-    for status, count in status_counts.items():
-        percentage = (count / total) * 100
-        print('{:>18}: {:>8} ({:05.2f}%)'.format(status, count, percentage))
+    def pop(self):
+        priority, item = heapq.heappop(self._heap)
+        self._set.remove(item)
+        return item
 
+    def first(self):
+        _, item = min(self._heap)
+        return item
 
-@curry
-def write_genomic_sequences(results, file_path, format='fastq',
-                            mode='w', **io_kwargs):
-    """ Test docstring """
-    with skbio.io.open(file_path, mode, **io_kwargs) as file_:
-        for result in results:
-            skbio.io.write(result.genomic_sequence, into=file_, format=format)
-            yield result
+    def __len__(self):
+        return len(self._heap)
 
+    def __str__(self):
+        return 'PrioritySet(heap={}, set={})'\
+            .format(str(self._heap), str(self._set))
 
-@curry
-def build_barcode_map(results, sample_map=None):
-    if sample_map is None:
-        return {result.genomic_sequence.metadata['id']:
-                result.barcode
-                for result in results}
-    else:
-        return {result.genomic_sequence.metadata['id']:
-                sample_map[result.barcode]
-                for result in results}
+    def __repr__(self):
+        return str(self)
 
 
-@curry
+@toolz.curry
 def groupby_reference(alignments, alignment_file=None):
     for reference, group in itertools.groupby(
             alignments, operator.attrgetter('reference_id')):
@@ -111,7 +101,7 @@ def groupby_position(alignments):
             yield (rev_grp[0].reference_end, -1), rev_grp
 
 
-@curry
+@toolz.curry
 def groupby_reference_position(alignments, alignment_file=None):
     chained = chain_groupby(
         alignments, [groupby_reference(alignment_file=alignment_file),
@@ -120,7 +110,7 @@ def groupby_reference_position(alignments, alignment_file=None):
         yield res
 
 
-@curry
+@toolz.curry
 def groupby_barcode(alignments, barcode_map):
     # Group alignments by barcodes.
     groups = collections.defaultdict(list)
@@ -143,5 +133,7 @@ def chain_groupby(iterable, groupby_funcs):
             yield key, group
     else:
         for key, group in grouped:
+            if not isinstance(key, tuple):
+                key = (key,)
             for sub_key, sub_group in chain_groupby(group, groupby_funcs[1:]):
                 yield key + sub_key, sub_group
