@@ -1,5 +1,6 @@
 import os
 import operator
+import logging
 from enum import Enum
 from os import path
 
@@ -21,6 +22,12 @@ from ._helpers.pipeline import (print_stats, build_barcode_map,
 from ._helpers.grouping import (chain_groupby, groupby_barcode,
                                 groupby_reference_position)
 from ._helpers.clustering import merge_within_distance
+
+
+logging.basicConfig(
+        format='%(asctime)-15s %(message)s',
+        datefmt='[%Y-%m-%d %H:%M:%S]',
+        level=logging.INFO)
 
 
 # --- Pipeline register hook + main --- #
@@ -66,6 +73,8 @@ def main(args):
     # Read barcode --> sample map if given.
     if args.sample_map is not None:
         sample_map = pd.read_csv(args.sample_map, sep='\t')
+        sample_map = dict(zip(sample_map['barcode'],
+                          sample_map['sample']))
     else:
         sample_map = None
 
@@ -91,34 +100,45 @@ def shear_splink(read_path, transposon, linker, barcodes,
                  bowtie_index, output_dir, contaminants=None,
                  sample_map=None, min_genomic_length=15):
 
+    logger = logging.getLogger()
+
     # Determine paths for intermediates/outputs.
     genomic_path = path.join(output_dir, 'genomic.fna')
     barcode_path = path.join(output_dir, 'genomic.barcodes.txt')
     alignment_base = path.join(output_dir, 'alignment')
 
     # Log progress with progressbar.
+    logger.info('Extracting genomic sequences')
+
     reads = skbio.read(read_path, format='fasta')
     reads = tqdm.tqdm(reads, total=count_fasta_entries(read_path),
-                      leave=True, ncols=80, desc='Test')
+                      leave=False, ncols=80)
 
     # Extract genomic sequences and barcodes
     _, barcode_frame = extract_genomic(
-        reads, transposon=transposon, barcodes=barcodes,
-        linker=linker, output_path=genomic_path,
-        contaminants=contaminants, min_length=min_genomic_length)
+        reads, transposon=transposon, barcodes=barcodes, linker=linker,
+        output_path=genomic_path, contaminants=contaminants,
+        min_length=min_genomic_length, logger=logger)
+
     barcode_frame.to_csv(barcode_path, sep='\t', index=False)
 
     # Align to reference with Bowtie2.
+    logger.info('Aligning to reference genome')
+
     aln_path = bowtie_align(genomic_path, bowtie_index, alignment_base,
                             bam_output=True, options={'-f': True},
                             log=alignment_base + '.log')
 
     # Identify insertions from alignment.
+    logger.info('Identifying insertions')
+
     barcode_map = dict(zip(barcode_frame['read_id'],
                            barcode_frame['barcode']))
     insertions = identify_insertions(aln_path, barcode_map=barcode_map)
 
     # Cluster and merge close insertions
+    logger.info('Merging close insertions')
+
     agg_funcs = {'depth': 'sum', 'depth_unique': 'sum'}
     insertions = merge_within_distance(
         insertions, max_dist=2000, agg_funcs=agg_funcs)
@@ -126,6 +146,10 @@ def shear_splink(read_path, transposon, linker, barcodes,
     # Assign ids to insertions.
     insertions['id'] = ['INS_{}'.format(i)
                         for i in range(1, len(insertions) + 1)]
+
+    # Map barcodes to samples.
+    if sample_map is not None:
+        insertions['sample'] = insertions['barcode'].map(sample_map)
 
     return insertions
 
@@ -142,9 +166,9 @@ class ShearSplinkStatus(Enum):
     proper_read = 7
 
 
-def extract_genomic(reads, transposon, barcodes, linker, output_path,
-                    sample_map=None, contaminants=None, min_length=15,
-                    io_kwargs=None):
+def extract_genomic(reads, transposon, barcodes, linker,
+                    output_path, contaminants=None, min_length=15,
+                    io_kwargs=None, logger=None):
     io_kwargs = io_kwargs or {}
 
     # Extract and write genomic sequences.
@@ -153,9 +177,8 @@ def extract_genomic(reads, transposon, barcodes, linker, output_path,
         _extract_reads(transposon=transposon,
                        barcodes=barcodes,
                        linker=linker,
-                       contaminants=contaminants,
-                       sample_map=sample_map),
-        print_stats,
+                       contaminants=contaminants),
+        print_stats(logger=logger),
         curried_filter(lambda r: r.status == ShearSplinkStatus.proper_read),
         curried_filter(lambda r: len(r.genomic_sequence) >= min_length),
         write_genomic_sequences(file_path=output_path,
@@ -171,8 +194,7 @@ def extract_genomic(reads, transposon, barcodes, linker, output_path,
 
 @toolz.curry
 def _extract_reads(reads, transposon, barcodes, linker, contaminants=None,
-                   transposon_func=None, barcode_func=None,
-                   linker_func=None, sample_map=None):
+                   transposon_func=None, barcode_func=None, linker_func=None):
 
     # Specify defaults for not provided aligners.
     if transposon_func is None:
@@ -209,9 +231,8 @@ def _extract_reads(reads, transposon, barcodes, linker, contaminants=None,
         yield result
 
 
-def _extract_read(
-        read, transposon_func, barcode_func,
-        linker_func, contaminant_func=None):
+def _extract_read(read, transposon_func, barcode_func,
+                  linker_func, contaminant_func=None):
     """ Extracts the genomic sequence and barcode from the passed
         read. Reads containing contaminants are dropped. Reads are
         expected to look as follows:
@@ -289,6 +310,7 @@ def identify_insertions(alignment_path, barcode_map):
 
 
 def _alignments_to_insertion(info, alignments, id_=None):
+    # Extract group info.
     ref, pos, strand, bc = info
 
     # Get positions of the non-transposon ends of the alignment.
