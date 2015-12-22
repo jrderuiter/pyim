@@ -8,7 +8,7 @@ import argparse
 import logging
 
 from pyim import __version__
-from pyim.pipelines import shear_splink
+from pyim.pipelines import shear_splink, shear_splink_sb
 
 logging.basicConfig(
         format='%(asctime)-15s %(message)s',
@@ -27,14 +27,15 @@ def main():
 
     # Register pipelines.
     shear_splink.register(subparsers)
+    shear_splink_sb.register(subparsers)
 
-    # Parse args and dispatch.
+    # Parse args.
+    args = parser.parse_args()
+
+    # Dispatch to pipeline.
     header_str = ' PyIM ({}) '.format(__version__)
     logger.info('{:-^40}'.format(header_str))
-
-    args = parser.parse_args()
     args.main(args)
-
     logger.info('{:-^40}'.format(' Done! '))
 
 
