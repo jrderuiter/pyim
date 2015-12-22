@@ -21,7 +21,9 @@ def print_stats(results, logger=None, header=False):
         print_('Extraction stats:')
 
     total = sum(status_counts.values())
-    for status, count in status_counts.items():
+
+    for status in sorted(status_counts.keys()):
+        count = status_counts[status]
         percentage = (count / total) * 100
         print_('{:>18}: {:>8} ({:5.2f}%)'
                .format(status, count, percentage))
