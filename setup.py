@@ -2,6 +2,9 @@ import sys
 
 from setuptools import setup, find_packages
 
+from pyim import __version__
+
+
 install_requires = ['future', 'numpy', 'scipy', 'pandas', 'pysam',
                     'natsort', 'rpy2', 'scikit-bio', 'toolz']
 
@@ -10,10 +13,10 @@ if not sys.version_info >= (3, ):
 
 setup(
     name='pyim',
-    version='0.4.3',
-    url='',
+    version=__version__,
+    url='https://bitbucket.org/jrderuiter/pyim',
     author='Julian de Ruiter',
-    author_email='j.r.deruiter@icloud.com',
+    author_email='julianderuiter@gmail.com',
     description='Predicts transposon insertion sites from DNA-seq data.',
     license='BSD',
     packages=find_packages(),
