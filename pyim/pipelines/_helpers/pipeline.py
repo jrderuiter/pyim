@@ -23,7 +23,7 @@ def print_stats(results, logger=None, header=False):
     total = sum(status_counts.values())
     for status, count in status_counts.items():
         percentage = (count / total) * 100
-        print_('{:>18}: {:>8} ({:05.2f}%)'
+        print_('{:>18}: {:>8} ({:5.2f}%)'
                .format(status, count, percentage))
 
 
