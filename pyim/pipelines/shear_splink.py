@@ -25,12 +25,6 @@ from ._helpers.grouping import (chain_groupby, groupby_barcode,
 from ._helpers.clustering import merge_within_distance
 
 
-logging.basicConfig(
-        format='%(asctime)-15s %(message)s',
-        datefmt='[%Y-%m-%d %H:%M:%S]',
-        level=logging.INFO)
-
-
 # --- Pipeline register hook + main --- #
 
 def register(subparsers, name='shear_splink'):
