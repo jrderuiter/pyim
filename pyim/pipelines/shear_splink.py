@@ -14,7 +14,7 @@ from toolz.curried import (filter as curried_filter,
 
 from pyim.alignment.bowtie2 import align as bowtie_align
 from pyim.alignment.vector import (align_exact, align_multiple,
-                                   align_with_reverse, reverse_alignment)
+                                   align_with_reverse)
 from pyim.util import count_fasta_entries
 
 from ._model import ExtractResult
@@ -33,10 +33,10 @@ def register(subparsers, name='shear_splink'):
     # Required arguments.
     parser.add_argument('input')
     parser.add_argument('output_dir')
-    parser.add_argument('bowtie_index')
-    parser.add_argument('transposon')
-    parser.add_argument('barcodes')
-    parser.add_argument('linker')
+    parser.add_argument('--bowtie_index', required=True)
+    parser.add_argument('--transposon', required=True)
+    parser.add_argument('--barcodes', required=True)
+    parser.add_argument('--linker', required=True)
 
     # Optional arguments.
     parser.add_argument('--contaminants', default=None)
@@ -82,7 +82,7 @@ def main(args):
         args.input, transposon, linker, barcodes,
         args.bowtie_index, args.output_dir,
         contaminants=contaminants, sample_map=sample_map,
-        min_genomic_length=args.min_genomic_length)
+        min_genomic_length=args.min_genomic_length, min_mapq=args.min_mapq)
 
     # Write insertion output.
     insertions.to_csv(path.join(args.output_dir, 'insertions.txt'),
@@ -93,7 +93,8 @@ def main(args):
 
 def shear_splink(read_path, transposon, linker, barcodes,
                  bowtie_index, output_dir, contaminants=None,
-                 sample_map=None, min_genomic_length=15):
+                 sample_map=None, min_genomic_length=15,
+                 min_mapq=37, extract_kws=None):
 
     logger = logging.getLogger()
 
@@ -105,15 +106,15 @@ def shear_splink(read_path, transposon, linker, barcodes,
     # Log progress with progressbar.
     logger.info('Extracting genomic sequences')
 
-    reads = skbio.read(read_path, format='fasta')
+    reads = skbio.read(read_path, format='fasta', constructor=skbio.DNA)
     reads = tqdm.tqdm(reads, total=count_fasta_entries(read_path),
-                      leave=False, ncols=80)
+                      leave=False, ncols=60)
 
     # Extract genomic sequences and barcodes
     _, barcode_frame = extract_genomic(
         reads, transposon=transposon, barcodes=barcodes, linker=linker,
         output_path=genomic_path, contaminants=contaminants,
-        min_length=min_genomic_length, logger=logger)
+        min_length=min_genomic_length, logger=logger, extract_kws=extract_kws)
 
     barcode_frame.to_csv(barcode_path, sep='\t', index=False)
 
@@ -138,13 +139,14 @@ def shear_splink(read_path, transposon, linker, barcodes,
     insertions = merge_within_distance(
         insertions, max_dist=2000, agg_funcs=agg_funcs)
 
-    # Assign ids to insertions.
-    insertions['id'] = ['INS_{}'.format(i)
-                        for i in range(1, len(insertions) + 1)]
-
     # Map barcodes to samples.
     if sample_map is not None:
         insertions['sample'] = insertions['barcode'].map(sample_map)
+
+    # Sort and assign ids to insertions.
+    insertions.sort_values(by=['chrom', 'position'], inplace=True)
+    insertions['id'] = ['INS_{}'.format(i)
+                        for i in range(1, len(insertions) + 1)]
 
     return insertions
 
@@ -163,8 +165,9 @@ class ShearSplinkStatus(Enum):
 
 def extract_genomic(reads, transposon, barcodes, linker,
                     output_path, contaminants=None, min_length=15,
-                    io_kwargs=None, logger=None):
-    io_kwargs = io_kwargs or {}
+                    logger=None, extract_kws=None):
+
+    extract_kws = extract_kws or {}
 
     # Extract and write genomic sequences.
     barcode_map = toolz.pipe(
@@ -172,12 +175,12 @@ def extract_genomic(reads, transposon, barcodes, linker,
         _extract_from_reads(transposon=transposon,
                             barcodes=barcodes,
                             linker=linker,
-                            contaminants=contaminants),
-        curried_map(_check_minimum_length(min_length=15)),
+                            contaminants=contaminants,
+                            **extract_kws),
+        curried_map(_check_minimum_length(min_length=min_length)),
         print_stats(logger=logger),
         curried_filter(_proper_filter),
-        write_genomic_sequences(file_path=output_path,
-                                format='fasta', **io_kwargs),
+        write_genomic_sequences(file_path=output_path, format='fasta'),
         build_barcode_map)
 
     # Build frame mapping reads to barcodes.
@@ -206,7 +209,7 @@ def _extract_from_reads(
     if contaminants is not None:
         contaminant_func = align_multiple(queries=contaminants,
                                           align_func=align_exact,
-                                          return_first=True)
+                                          raise_error=False)
     else:
         contaminant_func = None
 
@@ -259,7 +262,12 @@ def _extract_from_read(read, transposon_func, barcode_func,
     # alignment to bring everything into the same (fwd) orientation.
     if transposon_aln.strand == -1:
         read = read.reverse_complement()
-        transposon_aln = reverse_alignment(transposon_aln)
+        transposon_aln = transposon_aln.reverse()
+
+    # Identify location of linker.
+    linker_aln = linker_func(read)
+    if linker_aln is None:
+        return ExtractResult(None, None, ShearSplinkStatus.no_linker)
 
     # Identify barcode of the read.
     try:
@@ -270,11 +278,6 @@ def _extract_from_read(read, transposon_func, barcode_func,
         return ExtractResult(None, None, ShearSplinkStatus.multiple_barcodes)
 
     barcode = barcode_aln.query_id
-
-    # Identify location of linker.
-    linker_aln = linker_func(read)
-    if linker_aln is None:
-        return ExtractResult(None, None, ShearSplinkStatus.no_linker)
 
     # Extract genomic sequence using previous alignments.
     genomic = read[transposon_aln.target_end:linker_aln.target_start]
@@ -298,10 +301,13 @@ def _proper_filter(result):
 
 # --- Insertion identification --- #
 
-def identify_insertions(alignment_path, barcode_map):
+def identify_insertions(alignment_path, barcode_map, min_mapq=37):
     # Get alignments from bowtie.
     bam = pysam.AlignmentFile(alignment_path)
     alignments = bam.fetch(multiple_iterators=True)
+
+    # Filter by mapq.
+    alignments = filter(lambda a: a.mapq >= min_mapq, alignments)
 
     # Group alignments by barcode and position.
     aln_groups = chain_groupby(
