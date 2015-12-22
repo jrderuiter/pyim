@@ -9,7 +9,8 @@ import pandas as pd
 import skbio
 import toolz
 import tqdm
-from toolz.curried import filter as curried_filter
+from toolz.curried import (filter as curried_filter,
+                           map as curried_map)
 
 from pyim.alignment.bowtie2 import align as bowtie_align
 from pyim.alignment.vector import (align_exact, align_multiple,
@@ -74,7 +75,7 @@ def main(args):
     if args.sample_map is not None:
         sample_map = pd.read_csv(args.sample_map, sep='\t')
         sample_map = dict(zip(sample_map['barcode'],
-                          sample_map['sample']))
+                              sample_map['sample']))
     else:
         sample_map = None
 
@@ -174,13 +175,13 @@ def extract_genomic(reads, transposon, barcodes, linker,
     # Extract and write genomic sequences.
     barcode_map = toolz.pipe(
         reads,
-        _extract_reads(transposon=transposon,
-                       barcodes=barcodes,
-                       linker=linker,
-                       contaminants=contaminants),
+        _extract_from_reads(transposon=transposon,
+                            barcodes=barcodes,
+                            linker=linker,
+                            contaminants=contaminants),
+        curried_map(_check_minimum_length(min_length=15)),
         print_stats(logger=logger),
-        curried_filter(lambda r: r.status == ShearSplinkStatus.proper_read),
-        curried_filter(lambda r: len(r.genomic_sequence) >= min_length),
+        curried_filter(_proper_filter),
         write_genomic_sequences(file_path=output_path,
                                 format='fasta', **io_kwargs),
         build_barcode_map)
@@ -193,8 +194,9 @@ def extract_genomic(reads, transposon, barcodes, linker,
 
 
 @toolz.curry
-def _extract_reads(reads, transposon, barcodes, linker, contaminants=None,
-                   transposon_func=None, barcode_func=None, linker_func=None):
+def _extract_from_reads(
+        reads, transposon, barcodes, linker, contaminants=None,
+        transposon_func=None, barcode_func=None, linker_func=None):
 
     # Specify defaults for not provided aligners.
     if transposon_func is None:
@@ -221,7 +223,7 @@ def _extract_reads(reads, transposon, barcodes, linker, contaminants=None,
 
     # Extract and return results.
     extract_func = toolz.curry(
-         _extract_read,
+         _extract_from_read,
          transposon_func=transposon_func,
          barcode_func=barcode_func,
          linker_func=linker_func,
@@ -231,8 +233,8 @@ def _extract_reads(reads, transposon, barcodes, linker, contaminants=None,
         yield result
 
 
-def _extract_read(read, transposon_func, barcode_func,
-                  linker_func, contaminant_func=None):
+def _extract_from_read(read, transposon_func, barcode_func,
+                       linker_func, contaminant_func=None):
     """ Extracts the genomic sequence and barcode from the passed
         read. Reads containing contaminants are dropped. Reads are
         expected to look as follows:
@@ -284,6 +286,20 @@ def _extract_read(read, transposon_func, barcode_func,
     genomic = read[transposon_aln.target_end:linker_aln.target_start]
 
     return ExtractResult(genomic, barcode, ShearSplinkStatus.proper_read)
+
+
+@toolz.curry
+def _check_minimum_length(result, min_length):
+    """Flags proper reads if shorter than min_length."""
+    if (result.status == ShearSplinkStatus.proper_read and
+            len(result.genomic_sequence) < min_length):
+        result.status = ShearSplinkStatus.too_short
+    return result
+
+
+def _proper_filter(result):
+    """Filters extraction results for proper reads."""
+    return result.status == ShearSplinkStatus.proper_read
 
 
 # --- Insertion identification --- #
