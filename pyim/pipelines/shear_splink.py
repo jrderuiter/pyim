@@ -75,7 +75,7 @@ def main(args):
 
     # Create output_dir if it does not exist.
     if not path.exists(args.output_dir):
-        os.mkdir(args.output_dir)
+        os.makedirs(args.output_dir, exist_ok=True)
 
     # Run pipeline!
     insertions = shear_splink(
