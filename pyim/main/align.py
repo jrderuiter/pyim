@@ -6,8 +6,8 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 
 import argparse
 import logging
+import pkg_resources
 
-from pyim import __version__
 from pyim.pipelines import shear_splink, shear_splink_sb
 
 logging.basicConfig(
@@ -33,9 +33,12 @@ def main():
     args = parser.parse_args()
 
     # Dispatch to pipeline.
-    header_str = ' PyIM ({}) '.format(__version__)
+    version = pkg_resources.require('pyim')[0].version
+    header_str = ' PyIM ({}) '.format(version)
     logger.info('{:-^40}'.format(header_str))
+
     args.main(args)
+    
     logger.info('{:-^40}'.format(' Done! '))
 
 
