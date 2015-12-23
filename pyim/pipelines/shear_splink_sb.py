@@ -6,6 +6,7 @@ import skbio
 from .shear_splink import shear_splink
 
 from pyim.alignment import vector as vec
+from pyim.util import count_fasta_entries
 
 
 # --- Pipeline register hook + main --- #
@@ -35,6 +36,10 @@ def register(subparsers, name='shear_splink_sb'):
 
 
 def main(args):
+    # Prepare reads, counting total for progress bar.
+    reads = skbio.read(args.input, format='fasta', constructor=skbio.DNA)
+    total_reads = count_fasta_entries(args.input)
+
     # Read transposon, linker and barcode sequences.
     transposon = skbio.io.read(args.transposon, format='fasta', into=skbio.DNA)
     linker = skbio.io.read(args.linker, format='fasta', into=skbio.DNA)
@@ -82,10 +87,11 @@ def main(args):
 
     # Run pipeline!
     insertions = shear_splink(
-        args.input, transposon, linker, barcodes,
+        reads, transposon, linker, barcodes,
         args.bowtie_index, args.output_dir,
         contaminants=contaminants, sample_map=sample_map,
-        min_genomic_length=args.min_genomic_length, extract_kws=extract_kws)
+        min_genomic_length=args.min_genomic_length,
+        extract_kws=extract_kws, total_reads=total_reads)
 
     # Write insertion output.
     insertions.to_csv(path.join(args.output_dir, 'insertions.txt'),

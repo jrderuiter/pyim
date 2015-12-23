@@ -52,6 +52,10 @@ def register(subparsers, name='shear_splink'):
 
 
 def main(args):
+    # Prepare reads, counting total for progress bar.
+    reads = skbio.read(args.input, format='fasta', constructor=skbio.DNA)
+    total_reads = count_fasta_entries(args.input)
+
     # Read transposon, linker and barcode sequences.
     transposon = skbio.io.read(args.transposon, format='fasta', into=skbio.DNA)
     linker = skbio.io.read(args.linker, format='fasta', into=skbio.DNA)
@@ -79,10 +83,11 @@ def main(args):
 
     # Run pipeline!
     insertions = shear_splink(
-        args.input, transposon, linker, barcodes,
+        reads, transposon, linker, barcodes,
         args.bowtie_index, args.output_dir,
         contaminants=contaminants, sample_map=sample_map,
-        min_genomic_length=args.min_genomic_length, min_mapq=args.min_mapq)
+        min_genomic_length=args.min_genomic_length,
+        min_mapq=args.min_mapq, total_reads=total_reads)
 
     # Write insertion output.
     insertions.to_csv(path.join(args.output_dir, 'insertions.txt'),
@@ -91,10 +96,10 @@ def main(args):
 
 # --- Overall pipeline --- #
 
-def shear_splink(read_path, transposon, linker, barcodes,
+def shear_splink(reads, transposon, linker, barcodes,
                  bowtie_index, output_dir, contaminants=None,
                  sample_map=None, min_genomic_length=15,
-                 min_mapq=37, extract_kws=None):
+                 min_mapq=37, extract_kws=None, total_reads=None):
 
     logger = logging.getLogger()
 
@@ -105,10 +110,7 @@ def shear_splink(read_path, transposon, linker, barcodes,
 
     # Log progress with progressbar.
     logger.info('Extracting genomic sequences')
-
-    reads = skbio.read(read_path, format='fasta', constructor=skbio.DNA)
-    reads = tqdm.tqdm(reads, total=count_fasta_entries(read_path),
-                      leave=False, ncols=60)
+    reads = tqdm.tqdm(reads, total=total_reads, leave=False, ncols=60)
 
     # Extract genomic sequences and barcodes
     _, barcode_frame = extract_genomic(

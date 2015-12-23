@@ -38,7 +38,7 @@ def main():
     logger.info('{:-^40}'.format(header_str))
 
     args.main(args)
-    
+
     logger.info('{:-^40}'.format(' Done! '))
 
 
