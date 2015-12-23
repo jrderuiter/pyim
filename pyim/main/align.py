@@ -1,13 +1,10 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-from builtins import (ascii, bytes, chr, dict, filter, hex, input,
-                      int, map, next, oct, open, pow, range, round,
-                      str, super, zip)
 
 import argparse
 import logging
 
-from pyim.pipelines import shear_splink, shear_splink_sb
+from pyim.alignment.pipelines import shear_splink, shear_splink_sb
 from ._logging import print_header, print_footer
 
 
@@ -27,7 +24,7 @@ def main():
     args = parser.parse_args()
 
     # Dispatch to pipeline.
-    print_header(logger)
+    print_header(logger, command='align')
     args.main(args)
     print_footer(logger)
 
