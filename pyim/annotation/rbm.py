@@ -11,8 +11,8 @@ import pandas as pd
 from toolz import curry, pipe, merge_with, keymap
 from toolz.curried import filter, valfilter, valmap
 
-from tkgeno.io import GtfFile
-from tkgeno.util.pandas import reorder_columns
+from pyim.util.tabix import GtfFile
+from pyim.util.pandas import reorder_columns
 
 from .base import Annotator, get_closest
 from .window import Window, apply_window, fetch_features, annotate_features
@@ -87,8 +87,8 @@ class RbmAnnotator(Annotator):
         strand = row.strand if hasattr(row, 'strand') else None
 
         # Fetch features for orientation, or for the forward orientation.
-        apply_func = curry(apply_window, row.seqname,
-                           row.location, strand or 1)
+        apply_func = curry(apply_window, row.chrom,
+                           row.position, strand or 1)
         windows_fwd = valmap(apply_func, windows)
 
         features = fetch_features_windows(
@@ -96,7 +96,7 @@ class RbmAnnotator(Annotator):
 
         if strand is None:
             # Try again with reverse window orientation.
-            apply_func = curry(apply_window, row.seqname, row.location, -1)
+            apply_func = curry(apply_window, row.chrom, row.position, -1)
             windows_rev = valmap(apply_func, windows)
 
             features_rev = fetch_features_windows(
@@ -112,14 +112,15 @@ class RbmAnnotator(Annotator):
                     if len(frames) == 2 else frames[0],
                 features, features_rev)
 
-        if len(features) > 0:
-            annotated = {mech: annotate_features(row, features, mechanism=mech)
-                         for mech, features in features.items()}
+        annotated = {mech: annotate_features(row, features, mechanism=mech)
+                     for mech, features in features.items()
+                     if len(features) > 0}
 
+        if len(annotated) > 0:
             frame = pd.concat(annotated.values(), ignore_index=True)
             return reorder_columns(frame, order=row.index)
-
-        return None
+        else:
+            return None
 
 
 def fetch_features_windows(gtf, windows, feature_type):

@@ -10,13 +10,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from tkgeno.io import GtfFile
-from tkgeno.util.pandas import reorder_columns
+from pyim.util.tabix import GtfFile
+from pyim.util.pandas import reorder_columns
 
 from .base import Annotator, get_closest
 
 
-Window = namedtuple('Window', ['seqname', 'start', 'end', 'strand',
+Window = namedtuple('Window', ['reference', 'start', 'end', 'strand',
                                'incl_left', 'incl_right'])
 
 
@@ -96,14 +96,17 @@ class WindowAnnotator(Annotator):
 
 @lru_cache(maxsize=64)
 def fetch_features(gtf, window, feature_type):
-    return gtf.get_region(feature=feature_type, **window._asdict())
+    dict_ = window._asdict()
+    strand = dict_.pop('strand')
+    return gtf.get_region(filters={'feature': feature_type,
+                                   'strand': strand}, **dict_)
 
 
 def annotate_features(row, features, **kwargs):
     data = dict(row)
     data.update(dict(
         gene_id=features.gene_id,
-        distance=[feature_distance(s, e, row.location)
+        distance=[feature_distance(s, e, row.position)
                   for s, e in zip(features.start, features.end)]))
     data.update(**kwargs)
 

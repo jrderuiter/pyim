@@ -9,10 +9,9 @@ import argparse
 
 import pandas as pd
 
-from pyim.annotation import KcRbmAnnotator, RbmAnnotator, WindowAnnotator
+from pyim.annotation import RbmAnnotator, WindowAnnotator
 
 ANNOTATORS = {
-    'kcrbm': KcRbmAnnotator,
     'rbm': RbmAnnotator,
     'window': WindowAnnotator
 }
