@@ -1,31 +1,29 @@
-from __future__ import (absolute_import, division,
-                        print_function, unicode_literals)
-from builtins import (bytes, dict, int, list, object, range, str,
-                      ascii, chr, hex, input, next, oct, open,
-                      pow, round, super, filter, map, zip)
-
-import heapq
+import pysam
+from functools import reduce
 
 
-class PrioritySet(object):
+def _make_gen(reader):
+    b = reader(1024 * 1024)
+    while b:
+        yield b
+        b = reader(1024*1024)
 
-    def __init__(self):
-        self._heap = []
-        self._set = set()
 
-    def push(self, item, priority):
-        if item not in self._set:
-            heapq.heappush(self._heap, (priority, item))
-            self._set.add(item)
+def count_lines(file_path):
+    f = open(file_path, 'rb')
+    f_gen = _make_gen(f.raw.read)
+    return sum(buf.count(b'\n') for buf in f_gen)
 
-    def pop(self):
-        priority, item = heapq.heappop(self._heap)
-        self._set.remove(item)
-        return item
 
-    def first(self):
-        _, item = min(self._heap)
-        return item
+def count_fasta_entries(file_path):
+    f = open(file_path, 'rb')
+    f_gen = _make_gen(f.raw.read)
+    return sum(buf.count(b'>') for buf in f_gen)
 
-    def __len__(self):
-        return len(self._heap)
+
+def count_bam_entries(file_path):
+    # From Biostars at https://www.biostars.org/p/1890/.
+    # Could be faster for sorted/index bam files using idxstats.
+    reduce(lambda x, y: x + y,
+           [eval('+'.join(l.rstrip('\n').split('\t')[2:]))
+            for l in pysam.idxstats(file_path)])

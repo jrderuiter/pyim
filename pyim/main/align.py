@@ -5,52 +5,38 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       str, super, zip)
 
 import argparse
+import logging
 
-from pyim.pipelines.lam_pcr import LamPcrPipeline
-from pyim.pipelines.shear_splink import ShearSplinkPipeline
+from pyim import __version__
+from pyim.pipelines import shear_splink, shear_splink_sb
 
-PIPELINES = {
-    'lam_pcr': LamPcrPipeline,
-    'shear_splink': ShearSplinkPipeline
-}
+logging.basicConfig(
+        format='%(asctime)-15s %(message)s',
+        datefmt='[%Y-%m-%d %H:%M:%S]',
+        level=logging.INFO)
 
 
-def setup_parser():
+def main():
+    logger = logging.getLogger()
+
+    # Setup main parser.
     parser = argparse.ArgumentParser(prog='pyim-align')
 
     subparsers = parser.add_subparsers(dest='pipeline')
     subparsers.required = True
 
-    for name, class_ in PIPELINES.items():
-        class_.configure_argparser(subparsers, name=name)
+    # Register pipelines.
+    shear_splink.register(subparsers)
+    shear_splink_sb.register(subparsers)
 
-    return parser
-
-
-def main():
-    parser = setup_parser()
+    # Parse args.
     args = parser.parse_args()
 
-    # Check if a sub-parser was chosen.
-    if args.pipeline is None:
-        raise ValueError('No pipeline was specified as sub-command (choose '
-                         'from {})' .format(', '.join(PIPELINES.keys())))
-
-    # Parse options and extract main input/output parameters.
-    arg_dict = vars(args)
-
-    pipeline_name = arg_dict.pop('pipeline')
-    input_path = arg_dict.pop('input')
-    output_path = arg_dict.pop('output_dir')
-
-    # Instantiate chosen pipeline and run!
-    try:
-        pipeline_class = PIPELINES[pipeline_name]
-    except KeyError:
-        raise ValueError('Pipeline \'{}\' does not exist'.format(pipeline_name))
-    else:
-        pipeline = pipeline_class.from_args(arg_dict)
-        pipeline.run(input_path, output_path)
+    # Dispatch to pipeline.
+    header_str = ' PyIM ({}) '.format(__version__)
+    logger.info('{:-^40}'.format(header_str))
+    args.main(args)
+    logger.info('{:-^40}'.format(' Done! '))
 
 
 if __name__ == '__main__':

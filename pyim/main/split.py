@@ -12,7 +12,7 @@ import pandas as pd
 
 
 def setup_parser():
-    parser = ArgumentParser(prog='pyim-merge')
+    parser = ArgumentParser(prog='pyim-split')
 
     parser.add_argument('alignment_bam', type=Path)
     parser.add_argument('read_barcode_map', type=Path)
