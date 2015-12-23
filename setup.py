@@ -2,7 +2,7 @@ import sys
 
 from setuptools import setup, find_packages
 
-from pyim import __version__
+from version import get_git_version
 
 
 install_requires = ['future', 'numpy', 'scipy', 'pandas', 'pysam',
@@ -13,7 +13,7 @@ if not sys.version_info >= (3, ):
 
 setup(
     name='pyim',
-    version=__version__,
+    version=get_git_version(),
     url='https://bitbucket.org/jrderuiter/pyim',
     author='Julian de Ruiter',
     author_email='julianderuiter@gmail.com',
