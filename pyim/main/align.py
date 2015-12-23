@@ -6,14 +6,9 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 
 import argparse
 import logging
-import pkg_resources
 
 from pyim.pipelines import shear_splink, shear_splink_sb
-
-logging.basicConfig(
-        format='%(asctime)-15s %(message)s',
-        datefmt='[%Y-%m-%d %H:%M:%S]',
-        level=logging.INFO)
+from ._logging import print_header, print_footer
 
 
 def main():
@@ -21,7 +16,6 @@ def main():
 
     # Setup main parser.
     parser = argparse.ArgumentParser(prog='pyim-align')
-
     subparsers = parser.add_subparsers(dest='pipeline')
     subparsers.required = True
 
@@ -33,13 +27,9 @@ def main():
     args = parser.parse_args()
 
     # Dispatch to pipeline.
-    version = pkg_resources.require('pyim')[0].version
-    header_str = ' PyIM ({}) '.format(version)
-    logger.info('{:-^40}'.format(header_str))
-
+    print_header(logger)
     args.main(args)
-
-    logger.info('{:-^40}'.format(' Done! '))
+    print_footer(logger)
 
 
 if __name__ == '__main__':
