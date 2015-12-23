@@ -5,10 +5,13 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       str, super, zip)
 from future.utils import native_str
 
+import logging
 from argparse import ArgumentParser
 from pathlib import Path
 
 import pandas as pd
+
+from ._logging import print_header, print_footer
 
 
 def setup_parser():
@@ -19,7 +22,7 @@ def setup_parser():
 
     parser.add_argument('--names', nargs='+', default=None)
     parser.add_argument('--samples', nargs='+', default=None)
-    parser.add_argument('--complement', default=False, action='store_true')
+    # parser.add_argument('--complement', default=False, action='store_true')
 
     return parser
 
@@ -27,6 +30,10 @@ def setup_parser():
 def main():
     parser = setup_parser()
     args = parser.parse_args()
+
+    # Get logger and print header.
+    logger = logging.getLogger()
+    print_header(logger, command='merge')
 
     # Generate default names if none given.
     if args.names is None:
@@ -51,30 +58,35 @@ def main():
 
         # Augment ids to avoid duplicates in merged frame.
         if name != '':
-            frame['insertion_id'] = ['{}.{}'.format(name, id_)
-                                     for id_ in frame['insertion_id']]
-
+            frame['id'] = ['{}.{}'.format(name, id_)
+                           for id_ in frame['id']]
         ins_frames.append(frame)
 
     # Merge frames.
     merged = pd.concat(ins_frames, ignore_index=True)
 
+    logger.info('Merging insertions for {} datasets, containing {} samples'
+                .format(len(args.insertions), merged['sample'].nunique()))
+
     # Filter samples if needed.
     if args.samples is not None:
+        logger.info('Subsetting dataset to {} samples'
+                    .format(len(args.samples)))
+
         merged_samples = set(merged['sample'])
         for sample in args.samples:
             if sample not in merged_samples:
-                print('WARNING: unknown sample {}'.format(sample))
+                logging.warning('- Missing insertions for sample {}'
+                                .format(sample))
 
         mask = merged['sample'].isin(set(args.samples))
-
-        if not args.complement:
-            merged = merged.ix[mask]
-        else:
-            merged = merged.ix[~mask]
+        merged = merged.ix[mask]
 
     # Write output.
+    logging.info('Writing merged output')
     merged.to_csv(str(args.output), sep=native_str('\t'), index=False)
+
+    print_footer(logger)
 
 
 if __name__ == '__main__':
