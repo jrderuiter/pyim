@@ -103,6 +103,14 @@ def shear_splink(reads, transposon, linker, barcodes,
 
     logger = logging.getLogger()
 
+    # Subset barcodes to sample map (if given).
+    if sample_map is not None:
+        barcodes = [bc for bc in barcodes
+                    if bc.metadata['id'] in sample_map]
+
+        if len(barcodes) != len(sample_map):
+            raise ValueError('Missing or duplicate barcodes')
+
     # Determine paths for intermediates/outputs.
     genomic_path = path.join(output_dir, 'genomic.fna')
     barcode_path = path.join(output_dir, 'genomic.barcodes.txt')
@@ -110,7 +118,8 @@ def shear_splink(reads, transposon, linker, barcodes,
 
     # Log progress with progressbar.
     logger.info('Extracting genomic sequences')
-    reads = tqdm.tqdm(reads, total=total_reads, leave=False, ncols=60)
+    reads = tqdm.tqdm(reads, total=total_reads,
+                      unit='read', leave=False, ncols=60)
 
     # Extract genomic sequences and barcodes
     _, barcode_frame = extract_genomic(
