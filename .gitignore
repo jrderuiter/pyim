@@ -7,3 +7,4 @@ htmlcov
 .coverage
 _legacy
 docs/_build
+RELEASE-VERSION
