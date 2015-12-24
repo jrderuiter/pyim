@@ -93,7 +93,7 @@ def _annotate_for_window(insertion, trees, window):
 def fetch_in_window(trees, window):
     """Fetches features within given window in the interval trees."""
 
-    if window.strand is not None:
+    if not window.incl_left or not window.incl_right:
         raise NotImplementedError()
 
     try:
