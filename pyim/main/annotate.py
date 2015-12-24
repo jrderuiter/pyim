@@ -4,7 +4,7 @@ from __future__ import (absolute_import, division,
 import argparse
 import logging
 
-from pyim.annotation import window
+from pyim.annotation import window, rbm
 from ._logging import print_header, print_footer
 
 
@@ -18,6 +18,7 @@ def main():
 
     # Register pipelines.
     window.register(subparsers)
+    rbm.register(subparsers)
 
     # Parse args.
     args = parser.parse_args()
