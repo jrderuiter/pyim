@@ -4,119 +4,123 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)
 
-from collections import namedtuple
-from functools import lru_cache
-from pathlib import Path
+import itertools
+import logging
 
 import pandas as pd
+from intervaltree import IntervalTree
 
 from pyim.util.tabix import GtfFile
-from pyim.util.pandas import reorder_columns
 
-from .base import Annotator, get_closest
-
-
-Window = namedtuple('Window', ['reference', 'start', 'end', 'strand',
-                               'incl_left', 'incl_right'])
+from ._model import Window
 
 
-def apply_window(seqname, location, strand, window):
-    start = location + (window.start * strand)
-    end = location + (window.end * strand)
+def register(subparsers, name='window'):
+    parser = subparsers.add_parser(name, help=name + ' help')
 
-    if strand == -1:
-        start, end = end, start
-        incl_left, incl_right = window.incl_right, window.incl_left
-    else:
-        incl_left, incl_right = window.incl_left, window.incl_right
+    # Required arguments.
+    parser.add_argument('input')
+    parser.add_argument('output')
+    parser.add_argument('--gtf', required=True)
 
-    new_strand = strand * window.strand if window.strand is not None else None
+    # Optional arguments.
+    # parser.add_argument('--feature_type', default='gene')
+    parser.add_argument('--window_size', default=20000, type=int)
 
-    return Window(seqname, start, end, new_strand, incl_left, incl_right)
+    # Set main for dispatch.
+    parser.set_defaults(main=main)
 
-
-class WindowAnnotator(Annotator):
-
-    def __init__(self, gtf_path, window_size, feature_type='gene',
-                 id_column='insertion_id', closest=False):
-        super().__init__()
-
-        self._gtf = GtfFile(gtf_path)
-        self._window = Window(
-            seqname=None, start=-1 * window_size, end=window_size,
-            strand=None, incl_left=True, incl_right=True)
-
-        self._feature_type = feature_type
-        self._closest = closest
-        self._id_column = id_column
-
-    @classmethod
-    def configure_argparser(cls, subparsers, name='window'):
-        parser = subparsers.add_parser(name, help=name + ' help')
-
-        parser.add_argument('input', type=Path)
-        parser.add_argument('output', type=Path)
-        parser.add_argument('gtf')
-
-        parser.add_argument('--feature_type', default='gene')
-        parser.add_argument('--window_size', default=20000, type=int)
-
-        parser.add_argument('--id_column', default='insertion_id')
-        parser.add_argument('--closest', default=False, action='store_true')
-
-        return parser
-
-    def annotate(self, frame, type_='gene'):
-        results = [self._annotate_row(row, self._window,
-                                      self._gtf, self._feature_type)
-                   for _, row in frame.iterrows()]
-
-        results = pd.concat(filter(lambda x: x is not None, results),
-                            ignore_index=True)
-
-        return results if self._closest is not None \
-            else get_closest(frame, id_col=self._id_column)
-
-    @staticmethod
-    def _annotate_row(row, window, gtf, feature_type='gene'):
-        # Apply window for row.
-        window = apply_window(row.seqname, row.location,
-                              row.seqname, window)
-
-        # Fetch features for row.
-        features = fetch_features(gtf, window, feature_type=feature_type)
-
-        # Annotate row with features, if any were found.
-        if len(features) > 0:
-            frame = annotate_features(row, features)
-            return reorder_columns(frame, order=row.index)
-
-        return None
+    return parser
 
 
-@lru_cache(maxsize=64)
-def fetch_features(gtf, window, feature_type):
-    dict_ = window._asdict()
-    strand = dict_.pop('strand')
-    return gtf.get_region(filters={'feature': feature_type,
-                                   'strand': strand}, **dict_)
+def main(args):
+    logger = logging.getLogger()
+
+    insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
+    logger.info('Read {} insertions'.format(len(insertions)))
+
+    logger.info('Building interval trees from gtf')
+    gtf = GtfFile(args.gtf)
+    trees = build_interval_trees(gtf)
+
+    logger.info('Annotating insertions')
+    half_size = args.window_size // 2
+    window = Window(start=-half_size, end=half_size)
+
+    annotation = annotate_for_window(insertions, trees, window)
+
+    logger.info('Merging')
+    merged = pd.merge(insertions, annotation, on='id', how='left')
+    merged.to_csv(args.output, sep='\t', index=False)
 
 
-def annotate_features(row, features, **kwargs):
-    data = dict(row)
-    data.update(dict(
-        gene_id=features.gene_id,
-        distance=[feature_distance(s, e, row.position)
-                  for s, e in zip(features.start, features.end)]))
-    data.update(**kwargs)
-
-    return reorder_columns(pd.DataFrame(data), order=row.index)
+def annotate_for_window(insertions, trees, window):
+    """Annotates insertions for features in trees using given window."""
+    return annotate_for_windows(insertions, trees, [window])
 
 
-def feature_distance(start, end, location):
-    if start <= location <= end:
-        return 0
-    elif location > end:
-        return location - end
-    else:
-        return location - start
+def annotate_for_windows(insertions, trees, windows):
+    """Annotates insertions for features in trees using given windows."""
+
+    return pd.concat((_annotate_for_windows(row, trees, windows)
+                     for _, row in insertions.iterrows()), ignore_index=True)
+
+
+def _annotate_for_windows(insertion, trees, windows):
+    """Annotates insertion for features in trees using given windows."""
+
+    return pd.concat((_annotate_for_window(insertion, trees, w)
+                     for w in windows), ignore_index=True)
+
+
+def _annotate_for_window(insertion, trees, window):
+    """Annotates insertion for features in trees using given window."""
+
+    # Apply window for insertion.
+    applied = window.apply(
+        insertion['chrom'], insertion['position'], insertion['strand'])
+
+    # Fetch features within window.
+    features = fetch_in_window(trees, applied)
+
+    # Convert to frame.
+    frame = pd.DataFrame({
+        'id': insertion['id'],
+        'gene_name': [f['gene_name'] for f in features]})
+
+    # Include window name if known.
+    if window.name is not None:
+        frame['window'] = window.name
+
+    return frame
+
+
+def fetch_in_window(trees, window):
+    """Fetches features within given window in the interval trees."""
+
+    if window.strand is not None:
+        raise NotImplementedError()
+
+    try:
+        tree = trees[window.reference]
+        overlap = tree[window.start:window.end]
+    except KeyError:
+        overlap = []
+
+    return [interval[2] for interval in overlap]
+
+
+def build_interval_trees(gtf):
+    """Builds an interval tree of genes for each chromosome in gtf."""
+
+    # Only select gene features for now.
+    genes = gtf.fetch(filters={'feature': 'gene'})
+
+    trees = {}
+    for contig, grp in itertools.groupby(genes, lambda r: r.contig):
+        # Build a tree for each individual chromosome.
+        intervals = ((g.start, g.end, dict(g)) for g in grp
+                      if g.end > g.start)  # Avoid null intervals.
+        trees[contig] = IntervalTree.from_tuples(intervals)
+
+    return trees
