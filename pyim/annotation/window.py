@@ -39,7 +39,7 @@ def main(args):
     insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
     logger.info('Read {} insertions'.format(len(insertions)))
 
-    logger.info('Building interval trees from gtf')
+    logger.info('Building interval trees')
     gtf = GtfFile(args.gtf)
     trees = build_interval_trees(gtf)
 
@@ -47,41 +47,36 @@ def main(args):
     half_size = args.window_size // 2
     window = Window(start=-half_size, end=half_size)
 
-    annotation = annotate_for_window(insertions, trees, window)
+    annotation = annotate_for_windows(insertions, trees, [window])
 
-    logger.info('Merging')
+    logger.info('Merging annotation')
     merged = pd.merge(insertions, annotation, on='id', how='left')
     merged.to_csv(args.output, sep='\t', index=False)
-
-
-def annotate_for_window(insertions, trees, window):
-    """Annotates insertions for features in trees using given window."""
-    return annotate_for_windows(insertions, trees, [window])
 
 
 def annotate_for_windows(insertions, trees, windows):
     """Annotates insertions for features in trees using given windows."""
 
-    return pd.concat((_annotate_for_windows(row, trees, windows)
-                     for _, row in insertions.iterrows()), ignore_index=True)
+    if isinstance(insertions, pd.DataFrame):
+        insertions = (row for _, row in insertions.iterrows())
 
+    queries = itertools.product(insertions, windows)
 
-def _annotate_for_windows(insertion, trees, windows):
-    """Annotates insertion for features in trees using given windows."""
+    annotation = pd.concat((_annotate_for_window(ins, trees, window)
+                           for ins, window in queries), ignore_index=True)
 
-    return pd.concat((_annotate_for_window(insertion, trees, w)
-                     for w in windows), ignore_index=True)
+    return annotation
 
 
 def _annotate_for_window(insertion, trees, window):
     """Annotates insertion for features in trees using given window."""
 
     # Apply window for insertion.
-    applied = window.apply(
+    applied_window = window.apply(
         insertion['chrom'], insertion['position'], insertion['strand'])
 
     # Fetch features within window.
-    features = fetch_in_window(trees, applied)
+    features = fetch_in_window(trees, applied_window)
 
     # Convert to frame.
     frame = pd.DataFrame({
@@ -107,7 +102,17 @@ def fetch_in_window(trees, window):
     except KeyError:
         overlap = []
 
-    return [interval[2] for interval in overlap]
+    features = [interval[2] for interval in overlap]
+
+    if window.strand is not None:
+        features = [f for f in features
+                    if _strand_numeric(f['strand']) == window.strand]
+
+    return features
+
+
+def _strand_numeric(strand):
+    return 1 if strand == '+' else -1
 
 
 def build_interval_trees(gtf):
