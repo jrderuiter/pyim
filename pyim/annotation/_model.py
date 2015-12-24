@@ -10,34 +10,37 @@ class Window(object):
 
         self.incl_left = incl_left
         self.incl_right = incl_right
+
         self.name = name
 
         if not incl_left or not incl_right:
             raise NotImplementedError()
 
-    def apply(self, reference, location, strand=None):
+    def apply(self, reference, location, strand):
         """Applies window to specific location and strand"""
-        if strand is not None and self.strand is not None:
-            strand = self.strand * strand
+
+        # Determine start/end position.
+        if strand == 1:
+            start = location + self.start
+            end = location + self.end
+
+            incl_left = self.incl_left
+            incl_right = self.incl_right
+        elif strand == -1:
+            start = location - self.end
+            end = location - self.start
+
+            incl_right = self.incl_left
+            incl_left = self.incl_right
         else:
-            strand = self.strand
+            raise ValueError('Unknown value for strand ({})'
+                             .format(strand))
 
-        return Window(self.start + location, self.end + location,
-                      reference, strand, self.incl_left,
-                      self.incl_right, name=self.name)
+        # Determine new strand.
+        if self.strand is not None:
+            new_strand = self.strand * strand
+        else:
+            new_strand = None
 
-
-# def apply_window(seqname, location, strand, window):
-#     # TODO: Check strand logic!
-#     start = location + (window.start * strand)
-#     end = location + (window.end * strand)
-#
-#     if strand == -1:
-#         start, end = end, start
-#         incl_left, incl_right = window.incl_right, window.incl_left
-#     else:
-#         incl_left, incl_right = window.incl_left, window.incl_right
-#
-#     new_strand = strand * window.strand if window.strand is not None else None
-#
-#     return Window(seqname, start, end, new_strand, incl_left, incl_right)
+        return Window(start, end, reference, new_strand,
+                      incl_left, incl_right, name=self.name)
