@@ -93,25 +93,34 @@ def _annotate_for_window(insertion, trees, window):
 def fetch_in_window(trees, window):
     """Fetches features within given window in the interval trees."""
 
-    if not window.incl_left or not window.incl_right:
-        raise NotImplementedError()
-
+    # Find overlapping features.
     try:
         tree = trees[window.reference]
         overlap = tree[window.start:window.end]
     except KeyError:
         overlap = []
 
-    features = [interval[2] for interval in overlap]
+    # Extract features.
+    features = (interval[2] for interval in overlap)
 
+    # Filter inclusive/exclusive if needed.
+    if not window.incl_left:
+        features = (f for f in features if f.start > window.start)
+
+    if not window.incl_right:
+        features = (f for f in features if f.end < window.end)
+
+    # Filter for strand if needed.
     if window.strand is not None:
-        features = [f for f in features
-                    if _strand_numeric(f['strand']) == window.strand]
+        features = (f for f in features
+                    if _strand_numeric(f['strand']) == window.strand)
 
-    return features
+    return list(features)
 
 
 def _strand_numeric(strand):
+    """Convert strand to numeric representation."""
+
     return 1 if strand == '+' else -1
 
 
