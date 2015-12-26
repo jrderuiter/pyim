@@ -24,7 +24,8 @@ def main():
     args = parser.parse_args()
 
     # Dispatch to pipeline.
-    print_header(logger, command='annotate')
+    cmd_str = '{} {}'.format('annotate', args.annotator)
+    print_header(logger, command=cmd_str)
     args.main(args)
     print_footer(logger)
 

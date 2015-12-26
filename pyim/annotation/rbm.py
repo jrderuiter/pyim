@@ -7,9 +7,11 @@ from builtins import (ascii, bytes, chr, dict, hex, input,
 import logging
 
 import pandas as pd
+
 from pyim.util.tabix import GtfFile
 
 from ._model import Window
+from ._util import select_closest
 from .window import build_interval_trees, annotate_for_windows
 
 
@@ -27,7 +29,7 @@ def register(subparsers, name='rbm'):
     # Required arguments.
     parser.add_argument('input')
     parser.add_argument('output')
-    parser.add_argument('gtf')
+    parser.add_argument('--gtf', required=True)
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--preset', choices=WINDOW_PRESETS.keys())
@@ -37,7 +39,7 @@ def register(subparsers, name='rbm'):
     # parser.add_argument('--feature_type', default='gene',
     #                     choices={'gene', 'transcript'})
     # parser.add_argument('--id_column', default='insertion_id')
-    # parser.add_argument('--closest', default=False, action='store_true')
+    parser.add_argument('--closest', default=False, action='store_true')
 
     # Set main for dispatch.
     parser.set_defaults(main=main)
@@ -67,7 +69,12 @@ def main(args):
 
     # Annotate insertions.
     logger.info('Annotating insertions')
-    annotation = annotate_for_windows(insertions, trees, windows)
+    annotation = annotate_for_windows(
+        insertions, trees, windows, progress=True)
+
+    if args.closest:
+        logger.info('Reducing to closest features')
+        annotation = select_closest(annotation, col='gene_distance')
 
     # Merge annotation with insertion frame.
     logger.info('Merging annotation')

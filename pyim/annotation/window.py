@@ -9,10 +9,12 @@ import logging
 
 import pandas as pd
 from intervaltree import IntervalTree
+from tqdm import tqdm
 
 from pyim.util.tabix import GtfFile
 
 from ._model import Window
+from ._util import feature_distance, numeric_strand, select_closest
 
 
 def register(subparsers, name='window'):
@@ -24,6 +26,7 @@ def register(subparsers, name='window'):
     parser.add_argument('--gtf', required=True)
 
     # Optional arguments.
+    parser.add_argument('--closest', default=False, action='store_true')
     # parser.add_argument('--feature_type', default='gene')
     parser.add_argument('--window_size', default=20000, type=int)
 
@@ -36,34 +39,52 @@ def register(subparsers, name='window'):
 def main(args):
     logger = logging.getLogger()
 
+    # Read annotation.
     insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
     logger.info('Read {} insertions'.format(len(insertions)))
 
+    # Build lookup trees.
     logger.info('Building interval trees')
     gtf = GtfFile(args.gtf)
     trees = build_interval_trees(gtf)
 
+    # Define windows.
     logger.info('Annotating insertions')
     half_size = args.window_size // 2
     window = Window(start=-half_size, end=half_size)
 
-    annotation = annotate_for_windows(insertions, trees, [window])
+    # Annotate insertions.
+    annotation = annotate_for_windows(
+        insertions, trees, [window], progress=True)
 
+    if args.closest:
+        # Sub-select for closest features.
+        logger.info('Reducing to closest features')
+        annotation = select_closest(annotation, col='gene_distance')
+
+    # Merge annotation.
     logger.info('Merging annotation')
     merged = pd.merge(insertions, annotation, on='id', how='left')
     merged.to_csv(args.output, sep='\t', index=False)
 
 
-def annotate_for_windows(insertions, trees, windows):
+def annotate_for_windows(insertions, trees, windows, progress=False):
     """Annotates insertions for features in trees using given windows."""
 
-    if isinstance(insertions, pd.DataFrame):
-        insertions = (row for _, row in insertions.iterrows())
+    # Generate queries (insertion/window combinations).
+    ins_gen = (row for _, row in insertions.iterrows())
+    queries = itertools.product(ins_gen, windows)
 
-    queries = itertools.product(insertions, windows)
+    if progress:
+        queries = tqdm(queries, unit='query',
+                       total=len(insertions) * len(windows))
 
-    annotation = pd.concat((_annotate_for_window(ins, trees, window)
-                           for ins, window in queries), ignore_index=True)
+    # Generate annotation for queries.
+    annotations = (_annotate_for_window(ins, trees, window)
+                   for ins, window in queries)
+
+    # Merge annotations into single frame.
+    annotation = pd.concat(annotations, ignore_index=True)
 
     return annotation
 
@@ -78,10 +99,21 @@ def _annotate_for_window(insertion, trees, window):
     # Fetch features within window.
     features = fetch_in_window(trees, applied_window)
 
+    # Extract feature values.
+    values = ((f['gene_name'],
+               feature_distance(f, insertion['position']))
+              for f in features)
+
+    try:
+        name, distance = zip(*values)
+    except ValueError:
+        name, distance = [], []
+
     # Convert to frame.
     frame = pd.DataFrame({
         'id': insertion['id'],
-        'gene_name': [f['gene_name'] for f in features]})
+        'gene_name': name,
+        'gene_distance': distance})
 
     # Include window name if known.
     if window.name is not None:
@@ -105,23 +137,17 @@ def fetch_in_window(trees, window):
 
     # Filter inclusive/exclusive if needed.
     if not window.incl_left:
-        features = (f for f in features if f.start > window.start)
+        features = (f for f in features if f['start'] > window.start)
 
     if not window.incl_right:
-        features = (f for f in features if f.end < window.end)
+        features = (f for f in features if f['end'] < window.end)
 
     # Filter for strand if needed.
     if window.strand is not None:
         features = (f for f in features
-                    if _strand_numeric(f['strand']) == window.strand)
+                    if numeric_strand(f['strand']) == window.strand)
 
     return list(features)
-
-
-def _strand_numeric(strand):
-    """Convert strand to numeric representation."""
-
-    return 1 if strand == '+' else -1
 
 
 def build_interval_trees(gtf):

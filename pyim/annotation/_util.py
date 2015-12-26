@@ -1,7 +1,7 @@
 
-def get_closest(frame, id_col='insertion_id', distance_col='distance'):
+def select_closest(frame, id_col='id', col='distance'):
     def _is_closest(x):
-        abs_dist = x[distance_col].abs()
+        abs_dist = x[col].abs()
         return x.ix[abs_dist == abs_dist.min()]
 
     return (frame.groupby(id_col)
@@ -9,10 +9,25 @@ def get_closest(frame, id_col='insertion_id', distance_col='distance'):
             .reset_index(drop=True))
 
 
-def feature_distance(start, end, location):
+def feature_distance(feature, location, stranded=True):
+    start, end = feature['start'], feature['end']
+
     if start <= location <= end:
-        return 0
+        dist = 0
     elif location > end:
-        return location - end
+        dist = location - end
     else:
-        return location - start
+        dist = location - start
+
+    if stranded:
+        dist *= numeric_strand(feature['strand'])
+
+    return dist
+
+
+def numeric_strand(strand):
+    """Convert strand to numeric representation."""
+
+    return 1 if strand == '+' else -1
+
+

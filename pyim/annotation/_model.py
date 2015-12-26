@@ -13,9 +13,6 @@ class Window(object):
 
         self.name = name
 
-        if not incl_left or not incl_right:
-            raise NotImplementedError()
-
     def apply(self, reference, location, strand):
         """Applies window to specific location and strand"""
 
