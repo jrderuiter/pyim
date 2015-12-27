@@ -2,8 +2,9 @@ import pandas as pd
 
 import readline
 from rpy2 import robjects
+from rpy2.robjects.packages import importr
 
-from tkgeno.util.rpy2 import importr, pandas_to_dataframe, dataframe_to_pandas
+from pyim.util.rpy2 import pandas_to_dataframe, dataframe_to_pandas
 
 
 R_GENOMES = {

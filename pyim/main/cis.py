@@ -6,7 +6,7 @@ from builtins import (ascii, bytes, chr, dict, filter, hex, input,
 from future.utils import native_str
 
 from argparse import ArgumentParser
-from pathlib import Path
+from os import path
 
 import numpy as np
 import pandas as pd
@@ -18,8 +18,8 @@ from pyim.cis.cimpl import cimpl, get_cis, get_cis_mapping
 def setup_parser():
     parser = ArgumentParser(prog='pyim-cis')
 
-    parser.add_argument('input', type=Path)
-    parser.add_argument('output', type=Path)
+    parser.add_argument('input')
+    parser.add_argument('output')
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--pattern', default=None)
@@ -47,7 +47,7 @@ def main():
     args = parser.parse_args()
 
     # Read frame.
-    ins_frame = pd.read_csv(str(args.input), sep=native_str('\t'))
+    ins_frame = pd.read_csv(args.input, sep=native_str('\t'))
 
     # Run cimpl.
     cimpl_obj = cimpl(ins_frame, scales=args.scales, genome=args.genome,
@@ -78,9 +78,11 @@ def main():
                'strand_mean', 'strand_homogeneity']]
 
     # Write out outputs.
-    cis.to_csv(str(args.output.with_suffix('.sites.txt')),
+    cis.to_csv(path.splitext(args.output)[0] + '.sites.txt',
                sep=native_str('\t'), index=False)
-    ins_annotated.to_csv(str(args.output), sep=native_str('\t'), index=False)
+
+    ins_annotated.to_csv(args.output, sep=native_str('\t'), index=False)
+
 
 
 def _strandedness(insertions, min_homogeneity):
