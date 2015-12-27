@@ -1,0 +1,6 @@
+[submodule "external/kcrbm"]
+	path = external/kcrbm
+    url = git@bitbucket.org:jrderuiter/kcrbm.git
+[submodule "external/cimpl"]
+	path = external/cimpl
+	url = git@bitbucket.org:jrderuiter/cimpl.git
