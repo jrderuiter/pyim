@@ -15,7 +15,7 @@ from toolz.curried import (filter as curried_filter,
 from pyim.alignment.bowtie2 import align as bowtie_align
 from pyim.alignment.vector import (align_exact, align_multiple,
                                    align_with_reverse)
-from pyim.util import count_fasta_entries
+from pyim.util.file import count_fasta_entries
 
 from ._model import ExtractResult
 from ._helpers.pipeline import (print_stats, build_barcode_map,

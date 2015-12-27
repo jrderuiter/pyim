@@ -6,7 +6,7 @@ import skbio
 from .shear_splink import shear_splink
 
 from pyim.alignment import vector as vec
-from pyim.util import count_fasta_entries
+from pyim.util.file import count_fasta_entries
 
 
 # --- Pipeline register hook + main --- #
