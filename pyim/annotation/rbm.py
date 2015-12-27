@@ -36,9 +36,6 @@ def register(subparsers, name='rbm'):
     group.add_argument('--window_sizes', nargs=4, type=int)
 
     # Optional arguments.
-    # parser.add_argument('--feature_type', default='gene',
-    #                     choices={'gene', 'transcript'})
-    # parser.add_argument('--id_column', default='insertion_id')
     parser.add_argument('--closest', default=False, action='store_true')
 
     # Set main for dispatch.

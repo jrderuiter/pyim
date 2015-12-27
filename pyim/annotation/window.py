@@ -27,7 +27,6 @@ def register(subparsers, name='window'):
 
     # Optional arguments.
     parser.add_argument('--closest', default=False, action='store_true')
-    # parser.add_argument('--feature_type', default='gene')
     parser.add_argument('--window_size', default=20000, type=int)
 
     # Set main for dispatch.
