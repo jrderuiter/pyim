@@ -12,12 +12,30 @@ R_GENOMES = {
 }
 
 
+def map_insertions(insertions, scales, genome, alpha=0.05, **kwargs):
+    """Maps given insertions to CISs using CIMPL."""
+
+    # Convert insertion to cimpl format.
+    cimpl_ins = convert_to_cimpl(insertions)
+
+    # Run cimpl.
+    cimpl_result = cimpl(cimpl_ins, scales, genome, **kwargs)
+
+    # Extract cis sites and mapping.
+    cis = extract_cis(cimpl_result, alpha=alpha)
+    mapping = extract_mapping(cimpl_result, cis)
+
+    return cis, mapping
+
+
 def cimpl(insertions, scales, genome, system=None, pattern=None,
           lhc_method='none', iterations=1000, chromosomes=None,
           verbose=False, threads=1):
+    """Runs CIMPL on insertions (in CIMPL format)."""
+
     # Fill in chromosomes from data if not specified.
     if chromosomes is None:
-        chromosomes = list(insertions['seqname'].unique())
+        chromosomes = list(insertions['chr'].unique())
 
     # Determine if system or specific pattern was specified.
     if pattern is not None:
@@ -31,8 +49,7 @@ def cimpl(insertions, scales, genome, system=None, pattern=None,
     # Prepare chromosomes argument, adding 'chr' prefix and
     # converting to StrVector to pass to R.
     if not chromosomes[0].startswith('chr'):
-        chromosomes = ['chr' + c for c in chromosomes]
-    chromosomes = robjects.vectors.StrVector(chromosomes)
+         chromosomes = ['chr' + c for c in chromosomes]
 
     # Convert scales to IntVector if supplied as list.
     if type(scales) == list:
@@ -41,37 +58,34 @@ def cimpl(insertions, scales, genome, system=None, pattern=None,
     # Load genome object from R.
     genome_obj = _load_genome(genome)
 
-    # Convert insertions to cimpl format.
-    cimpl_frame = _convert_to_cimpl_dataframe(insertions)
-
     # Check if contig_depth is present (if doing hop exclusion).
-    if lhc_method == 'exclude' and 'contig_depth' not in cimpl_frame:
+    if lhc_method == 'exclude' and 'contig_depth' not in insertions:
         raise ValueError('Insertion depth is needed for lhc exclusion')
 
     # Run CIMPL!
     cimpl_r = importr('cimpl')
     cimpl_obj = cimpl_r.doCimplAnalysis(
-        pandas_to_dataframe(cimpl_frame),
+        pandas_to_dataframe(insertions),
         scales=scales, n_iterations=iterations,
         lhc_method=lhc_method, threads=threads, BSgenome=genome_obj,
-        chromosomes=chromosomes, verbose=verbose, **extra_args)
+        chromosomes=robjects.vectors.StrVector(chromosomes),
+        verbose=verbose, **extra_args)
 
     return cimpl_obj
 
 
-def _convert_to_cimpl_dataframe(insertions):
+def convert_to_cimpl(insertions):
     # Extract and rename required columns.
-    cimpl_frame = insertions.ix[:, ['insertion_id', 'seqname',
-                                    'location', 'sample']]
-    cimpl_frame.columns = ['id', 'chr', 'location', 'sampleID']
+    cimpl_ins = insertions.ix[:, ['id', 'chrom', 'position', 'sample']]
+    cimpl_ins.columns = ['id', 'chr', 'location', 'sampleID']
 
     if 'depth_unique' in insertions:
-        cimpl_frame['contig_depth'] = insertions['depth_unique']
+        cimpl_ins['contig_depth'] = insertions['depth_unique']
 
     # Add 'chr' prefix to the chromosome names if needed.
-    cimpl_frame['chr'] = _prefix_chromosomes(cimpl_frame['chr'])
+    cimpl_ins['chr'] = _prefix_chromosomes(cimpl_ins['chr'])
 
-    return cimpl_frame
+    return cimpl_ins
 
 
 def _prefix_chromosomes(series, prefix='chr'):
@@ -95,7 +109,7 @@ def _load_genome(genome):
     return genome_obj
 
 
-def get_cis(cimpl_obj, alpha=0.05, mul_test=True):
+def extract_cis(cimpl_obj, alpha=0.05, mul_test=True):
     cimpl_r = importr('cimpl')
     cis_obj = cimpl_r.getCISs(cimpl_obj, alpha=alpha, mul_test=mul_test)
 
@@ -116,15 +130,25 @@ def get_cis(cimpl_obj, alpha=0.05, mul_test=True):
                            'scale', 'p_value', 'n_insertions',
                            'peak_location', 'peak_height', 'width']]
 
+    # Rename and reshuffle cis columns.
+    cis_frame = cis_frame.rename(
+        columns={'seqname': 'chrom',
+                 'peak_location': 'position',
+                 'peak_height': 'height'})
+
+    cis_frame = cis_frame[['cis_id', 'chrom', 'position', 'scale',
+                           'n_insertions', 'p_value', 'start', 'end',
+                           'height', 'width']]
+
     return cis_frame
 
 
-def get_cis_mapping(cimpl_obj, cis_frame):
+def extract_mapping(cimpl_obj, cis_frame):
     # Add cis_id as index to cis frame before passing to R,
     # ensures CIMPL uses cis id's instead of row indices.
     cis_frame = cis_frame.copy()
     cis_frame.set_index('cis_id', drop=False, inplace=True)
-    cis_frame['chromosomes'] = _prefix_chromosomes(cis_frame['seqname'])
+    cis_frame['chromosomes'] = _prefix_chromosomes(cis_frame['chrom'])
     cis_frame_r = pandas_to_dataframe(cis_frame)
 
     # Retrieve cis matrix from cimpl.
@@ -178,3 +202,25 @@ def _expand_row(row, col, delimiter):
         row_dict[col] = [row[col]]
 
     return pd.DataFrame(row_dict)
+
+
+# def cis_strandedness(insertions, min_homogeneity):
+#     strand_mean = insertions.strand.mean()
+#     strand = int(np.sign(strand_mean))
+#
+#     if strand != 0:
+#         homogeneity = (insertions.strand == strand).sum() / len(insertions)
+#     else:
+#         homogeneity = 0.5
+#
+#     if homogeneity < min_homogeneity:
+#         strand = 0
+#
+#     return pd.Series(dict(strand=strand,
+#                           strand_mean=strand_mean,
+#                           strand_homogeneity=homogeneity))
+#
+#     # Determine strand of cis sites.
+#     strand_func = curry(_strandedness, min_homogeneity=args.strand_homogeneity)
+#     cis_strand = insertions.groupby('cis_id').apply(strand_func)
+#     cis = pd.merge(cis, cis_strand.reset_index(), on='cis_id')

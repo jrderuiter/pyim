@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from toolz import curry
 
-from pyim.cis.cimpl import cimpl, get_cis, get_cis_mapping
+from pyim.cis.cimpl import map_insertions
 
 
 def setup_parser():
@@ -29,7 +29,7 @@ def setup_parser():
     parser.add_argument('--chromosomes', nargs='+', default=None)
     parser.add_argument('--scales', nargs='+', type=int, default=30000)
 
-    parser.add_argument('--strand_homogeneity', type=float, default=0.75)
+    # parser.add_argument('--strand_homogeneity', type=float, default=0.75)
 
     parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--iterations', type=int, default=1000)
@@ -46,61 +46,26 @@ def main():
     parser = setup_parser()
     args = parser.parse_args()
 
-    # Read frame.
-    ins_frame = pd.read_csv(args.input, sep=native_str('\t'))
+    # Read insertions..
+    insertions = pd.read_csv(args.input, sep=native_str('\t'),
+                             dtype={'chrom': str})
 
-    # Run cimpl.
-    cimpl_obj = cimpl(ins_frame, scales=args.scales, genome=args.genome,
-                      system=args.system, pattern=args.pattern,
-                      lhc_method=args.lhc_method, chromosomes=args.chromosomes,
-                      iterations=args.iterations, threads=args.threads,
-                      verbose=args.verbose)
-
-    # Extract cis and cis mapping from object.
-    cis = get_cis(cimpl_obj, alpha=args.alpha, mul_test=True)
-    cis_mapping = get_cis_mapping(cimpl_obj, cis_frame=cis)
+    # Run cimpl on insertions.
+    cis, mapping = map_insertions(
+        insertions, scales=args.scales, genome=args.genome, alpha=args.alpha,
+        system=args.system, pattern=args.pattern, lhc_method=args.lhc_method,
+        chromosomes=args.chromosomes, iterations=args.iterations,
+        threads=args.threads, verbose=args.verbose)
 
     # Annotate insertions with cis mapping.
-    ins_annotated = pd.merge(ins_frame, cis_mapping, on='insertion_id')
-
-    # Determine strand of cis sites.
-    strand_func = curry(_strandedness, min_homogeneity=args.strand_homogeneity)
-    cis_strand = ins_annotated.groupby('cis_id').apply(strand_func)
-
-    # Merge strand information with cis sites.
-    cis = pd.merge(cis, cis_strand.reset_index(), on='cis_id')
-
-    # Rename and reshuffle cis columns.
-    cis = cis.rename(columns={'peak_location': 'location',
-                              'peak_height': 'height'})
-    cis = cis[['cis_id', 'seqname', 'location', 'strand', 'scale',
-               'n_insertions', 'p_value', 'start', 'end', 'height', 'width',
-               'strand_mean', 'strand_homogeneity']]
+    mapping_tmp = mapping.rename(columns={'insertion_id': 'id'})
+    insertions = pd.merge(insertions, mapping_tmp, on='id')
 
     # Write out outputs.
-    cis.to_csv(path.splitext(args.output)[0] + '.sites.txt',
-               sep=native_str('\t'), index=False)
+    cis_path = path.splitext(args.output)[0] + '.sites.txt'
+    cis.to_csv(cis_path, sep=native_str('\t'), index=False)
 
-    ins_annotated.to_csv(args.output, sep=native_str('\t'), index=False)
-
-
-
-def _strandedness(insertions, min_homogeneity):
-    strand_mean = insertions.strand.mean()
-    strand = int(np.sign(strand_mean))
-
-    if strand != 0:
-        homogeneity = (insertions.strand == strand).sum() / len(insertions)
-    else:
-        homogeneity = 0.5
-
-    if homogeneity < min_homogeneity:
-        strand = 0
-
-    return pd.Series(dict(strand=strand,
-                          strand_mean=strand_mean,
-                          strand_homogeneity=homogeneity))
-
+    insertions.to_csv(args.output, sep=native_str('\t'), index=False)
 
 
 if __name__ == '__main__':
