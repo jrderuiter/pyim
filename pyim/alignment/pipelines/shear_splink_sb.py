@@ -91,7 +91,8 @@ def main(args):
         args.bowtie_index, args.output_dir,
         contaminants=contaminants, sample_map=sample_map,
         min_genomic_length=args.min_genomic_length,
-        extract_kws=extract_kws, total_reads=total_reads)
+        min_depth=args.min_depth, extract_kws=extract_kws,
+        total_reads=total_reads)
 
     # Write insertion output.
     insertions.to_csv(path.join(args.output_dir, 'insertions.txt'),

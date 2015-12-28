@@ -87,7 +87,8 @@ def main(args):
         args.bowtie_index, args.output_dir,
         contaminants=contaminants, sample_map=sample_map,
         min_genomic_length=args.min_genomic_length,
-        min_mapq=args.min_mapq, total_reads=total_reads)
+        min_mapq=args.min_mapq, min_depth=args.min_depth,
+        total_reads=total_reads)
 
     # Write insertion output.
     insertions.to_csv(path.join(args.output_dir, 'insertions.txt'),
@@ -99,7 +100,8 @@ def main(args):
 def shear_splink(reads, transposon, linker, barcodes,
                  bowtie_index, output_dir, contaminants=None,
                  sample_map=None, min_genomic_length=15,
-                 min_mapq=37, extract_kws=None, total_reads=None):
+                 min_mapq=37, min_depth=None,
+                 extract_kws=None, total_reads=None):
 
     logger = logging.getLogger()
 
@@ -153,6 +155,10 @@ def shear_splink(reads, transposon, linker, barcodes,
     # Map barcodes to samples.
     if sample_map is not None:
         insertions['sample'] = insertions['barcode'].map(sample_map)
+
+    # Filter on (unique) depth.
+    if min_depth is not None:
+        insertions = insertions.ix[insertions['depth_unique'] >= min_depth]
 
     # Sort and assign ids to insertions.
     insertions.sort_values(by=['chrom', 'position'], inplace=True)
