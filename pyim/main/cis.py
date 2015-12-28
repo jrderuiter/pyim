@@ -12,6 +12,7 @@ import logging
 import pandas as pd
 
 from pyim.cis.cimpl import map_insertions
+from pyim.cis._util import annotate_cis_strand
 from pyim.util.insertions import subset_samples
 
 from ._logging import print_header, print_footer
@@ -36,7 +37,7 @@ def setup_parser():
     parser.add_argument('--lhc_method', choices={'none', 'exclude'},
                         default='exclude')
 
-    # parser.add_argument('--strand_homogeneity', type=float, default=0.75)
+    parser.add_argument('--strand_homogeneity', type=float, default=None)
 
     parser.add_argument('--alpha', type=float, default=0.05)
 
@@ -80,6 +81,11 @@ def main():
 
     mapping_tmp = mapping.rename(columns={'insertion_id': 'id'})
     insertions = pd.merge(insertions, mapping_tmp, on='id')
+
+    # Determine strand of cis sites.
+    if args.strand_homogeneity is not None:
+        logging.info('Determining CIS strands')
+        cis = annotate_cis_strand(cis, insertions, args.strand_homogeneity)
 
     # Write out outputs.
     logger.info('Writing outputs')

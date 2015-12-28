@@ -202,25 +202,3 @@ def _expand_row(row, col, delimiter):
         row_dict[col] = [row[col]]
 
     return pd.DataFrame(row_dict)
-
-
-# def cis_strandedness(insertions, min_homogeneity):
-#     strand_mean = insertions.strand.mean()
-#     strand = int(np.sign(strand_mean))
-#
-#     if strand != 0:
-#         homogeneity = (insertions.strand == strand).sum() / len(insertions)
-#     else:
-#         homogeneity = 0.5
-#
-#     if homogeneity < min_homogeneity:
-#         strand = 0
-#
-#     return pd.Series(dict(strand=strand,
-#                           strand_mean=strand_mean,
-#                           strand_homogeneity=homogeneity))
-#
-#     # Determine strand of cis sites.
-#     strand_func = curry(_strandedness, min_homogeneity=args.strand_homogeneity)
-#     cis_strand = insertions.groupby('cis_id').apply(strand_func)
-#     cis = pd.merge(cis, cis_strand.reset_index(), on='cis_id')
