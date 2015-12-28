@@ -90,7 +90,7 @@ def convert_to_cimpl(insertions):
 
 def _prefix_chromosomes(series, prefix='chr'):
     # Add 'chr' prefix to the chromosome names if needed.
-    if not series[0].startswith('chr'):
+    if len(series) > 0 and not series.iloc[0].startswith('chr'):
         series = series.map(lambda c: prefix + c)
     return series
 

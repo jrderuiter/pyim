@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from pyim.util.insertions import subset_samples
 from ._logging import print_header, print_footer
 
 
@@ -72,15 +73,7 @@ def main():
     if args.samples is not None:
         logger.info('Subsetting dataset to {} samples'
                     .format(len(args.samples)))
-
-        merged_samples = set(merged['sample'])
-        for sample in args.samples:
-            if sample not in merged_samples:
-                logging.warning('- Missing insertions for sample {}'
-                                .format(sample))
-
-        mask = merged['sample'].isin(set(args.samples))
-        merged = merged.ix[mask]
+        merged = subset_samples(merged, args.samples, logger=logger)
 
     # Write output.
     logging.info('Writing merged output')
