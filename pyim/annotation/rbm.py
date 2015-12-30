@@ -4,6 +4,7 @@ from builtins import (ascii, bytes, chr, dict, hex, input,
                       int, map, next, oct, open, pow, range, round,
                       str, super, zip)  # filter
 
+import itertools
 import logging
 
 import pandas as pd
@@ -51,6 +52,13 @@ def main(args):
     insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
     logger.info('Read {} insertions'.format(len(insertions)))
 
+    # Replace unstranded if needed.
+    if (~insertions['strand'].isin({-1, 1})).any():
+        logger.warning('Replacing unstranded insertions')
+        converted = replace_unstranded(insertions)
+    else:
+        converted = insertions
+
     # Build annotation trees.
     logger.info('Building interval trees')
     gtf = GtfFile(args.gtf)
@@ -67,9 +75,10 @@ def main(args):
     # Annotate insertions.
     logger.info('Annotating insertions')
     annotation = annotate_for_windows(
-        insertions, trees, windows, progress=True)
+        converted, trees, windows, progress=True)
 
     if args.closest:
+        import pdb; pdb.set_trace()
         logger.info('Reducing to closest features')
         annotation = select_closest(annotation, col='gene_distance')
 
@@ -92,3 +101,29 @@ def build_windows(ranges):
     ]
 
     return windows
+
+
+def replace_unstranded(insertions):
+    """Replaces unstranded insertions with two stranded insertions."""
+
+    # Split stranded and unstranded.
+    mask = insertions['strand'].isin({-1, 1})
+    stranded = insertions.ix[mask]
+    unstranded = insertions.ix[~mask]
+
+    # Convert unstranded into two stranded.
+    converted = (_to_stranded(ins) for _, ins in unstranded.iterrows())
+    converted = pd.DataFrame.from_records(
+        itertools.chain.from_iterable(converted))
+
+    return pd.concat((stranded, converted), ignore_index=True)
+
+
+def _to_stranded(insertion):
+    fwd = insertion.copy()
+    fwd['strand'] = 1
+
+    rev = insertion.copy()
+    rev['strand'] = -1
+
+    return [fwd, rev]
