@@ -100,18 +100,20 @@ def _annotate_for_window(insertion, trees, window):
 
     # Extract feature values.
     values = ((f['gene_name'],
+               f['gene_id'],
                feature_distance(f, insertion['position']))
               for f in features)
 
     try:
-        name, distance = zip(*values)
+        name, gene_id, distance = zip(*values)
     except ValueError:
-        name, distance = [], []
+        name, gene_id, distance = [], [], []
 
     # Convert to frame.
     frame = pd.DataFrame({
         'id': insertion['id'],
         'gene_name': name,
+        'gene_id': gene_id,
         'gene_distance': distance})
 
     # Include window name if known.
@@ -159,7 +161,7 @@ def build_interval_trees(gtf):
     for contig, grp in itertools.groupby(genes, lambda r: r.contig):
         # Build a tree for each individual chromosome.
         intervals = ((g.start, g.end, dict(g)) for g in grp
-                      if g.end > g.start)  # Avoid null intervals.
+                     if g.end > g.start)  # Avoid null intervals.
         trees[contig] = IntervalTree.from_tuples(intervals)
 
     return trees
