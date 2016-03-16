@@ -1,8 +1,8 @@
-from __future__ import (absolute_import, division,
-                        print_function, unicode_literals)
-from builtins import (ascii, bytes, chr, dict, hex, input,
-                      int, map, next, oct, open, pow, range, round,
-                      str, super, zip)  # filter
+from __future__ import absolute_import, division, print_function
+
+#pylint: disable=wildcard-import,unused-wildcard-import,redefined-builtin
+from builtins import *
+#pylint: enable=wildcard-import,unused-wildcard-import,redefined-builtin
 
 import itertools
 import logging
@@ -11,10 +11,11 @@ import pandas as pd
 
 from pyim.util.tabix import GtfFile
 
+#pylint: disable=import-error
 from ._model import Window
 from ._util import select_closest
 from .window import build_interval_trees, annotate_for_windows
-
+#pylint: enable=import-error
 
 # Window format: (us, ua, ds, da)
 WINDOW_PRESETS = {
@@ -50,9 +51,24 @@ def main(args):
 
     # Read insertions.
     insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
-    logger.info('Read {} insertions'.format(len(insertions)))
+    logger.info('Read %d insertions', len(insertions))
 
-    # Replace unstranded if needed.
+    # Define windows.
+    if args.window_sizes is not None:
+        window_sizes = args.window_sizes
+    else:
+        window_sizes = WINDOW_PRESETS[args.preset]
+
+    # Annotate insertions.
+    annotated = rbm(insertions, args.gtf, window_sizes, logger,
+                    closest=args.closest, verbose=True)
+    annotated.to_csv(args.output, sep='\t', index=False)
+
+
+def rbm(insertions, gtf_path, window_sizes, logger,
+        closest=False, verbose=False):
+
+    # Replace unstranded insertions with two stranded insertions.
     if (~insertions['strand'].isin({-1, 1})).any():
         logger.warning('Replacing unstranded insertions')
         converted = replace_unstranded(insertions)
@@ -61,35 +77,30 @@ def main(args):
 
     # Build annotation trees.
     logger.info('Building interval trees')
-    gtf = GtfFile(args.gtf)
+    gtf = GtfFile(gtf_path)
     trees = build_interval_trees(gtf)
 
     # Define windows.
-    if args.preset is not None:
-        window_sizes = WINDOW_PRESETS[args.preset]
-    else:
-        window_sizes = args.window_sizes
-
     windows = build_windows(window_sizes)
 
     # Annotate insertions.
     logger.info('Annotating insertions')
     annotation = annotate_for_windows(
-        converted, trees, windows, progress=True)
+        converted, trees, windows, progress=verbose)
 
-    if args.closest:
-        import pdb; pdb.set_trace()
+    if closest:
         logger.info('Reducing to closest features')
         annotation = select_closest(annotation, col='gene_distance')
 
     # Merge annotation with insertion frame.
     logger.info('Merging annotation')
     merged = pd.merge(insertions, annotation, on='id', how='left')
-    merged.to_csv(args.output, sep='\t', index=False)
+
+    return merged
 
 
-def build_windows(ranges):
-    us, ua, ds, da = ranges
+def build_windows(window_sizes):
+    us, ua, ds, da = window_sizes
 
     windows = [
         Window(0, 1, strand=1, incl_left=True, incl_right=True, name='is'),
@@ -97,8 +108,7 @@ def build_windows(ranges):
         Window(-us, 0, strand=1, incl_left=True, incl_right=False, name='us'),
         Window(-ua, 0, strand=-1, incl_left=True, incl_right=False, name='ua'),
         Window(1, ds, strand=1, incl_left=False, incl_right=True, name='ds'),
-        Window(1, da, strand=-1, incl_left=False, incl_right=True, name='da')
-    ]
+        Window(1, da, strand=-1, incl_left=False, incl_right=True, name='da')]
 
     return windows
 
