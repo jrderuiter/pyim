@@ -6,7 +6,7 @@ from version import get_git_version
 
 
 install_requires = ['future', 'numpy', 'scipy', 'pandas', 'pysam',
-                    'rpy2', 'scikit-bio', 'toolz']
+                    'rpy2', 'scikit-bio', 'toolz', 'tqdm']
 
 if not sys.version_info >= (3, ):
     install_requires += ['pathlib']

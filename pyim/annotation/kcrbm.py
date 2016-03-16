@@ -16,7 +16,6 @@ from pyim.util.rpy2 import dataframe_to_pandas
 from ._util import select_closest
 
 
-
 CHROM_MAP = dict(zip(
     list(map(str, range(1, 19+1))) + ['X', 'Y'],
     range(1, 21+1)
@@ -65,7 +64,6 @@ def main(args):
     logger.info('Merging annotation')
     merged = pd.merge(insertions, annotation, on='id', how='left')
     merged.to_csv(args.output, sep='\t', index=False)
-
 
 
 def annotate(insertions, reference, system, method):

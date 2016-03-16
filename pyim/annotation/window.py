@@ -99,21 +99,22 @@ def _annotate_for_window(insertion, trees, window):
     features = fetch_in_window(trees, applied_window)
 
     # Extract feature values.
-    values = ((f['gene_id'],
-               f['gene_name'],
+    values = ((f['gene_name'],
+               f['gene_id'],
                feature_distance(f, insertion['position']))
               for f in features)
 
     try:
-        id_, name, distance = zip(*values)
+        name, gene_id, distance = zip(*values)
     except ValueError:
-        id_, name, distance = [], [], []
+        name, gene_id, distance = [], [], []
 
     # Convert to frame.
     frame = pd.DataFrame({
         'id': insertion['id'],
         'gene_id': id_,
         'gene_name': name,
+        'gene_id': gene_id,
         'gene_distance': distance})
 
     # Include window name if known.
