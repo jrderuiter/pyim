@@ -71,8 +71,8 @@ def sam_to_bam(sam_path, bam_path=None, sort=False,
         # Pipe bam into samtools sort for sorting.
         p1 = subprocess.Popen(['samtools', 'view', '-b', sam_path],
                               stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(['samtools', 'sort', '-',
-                               path.splitext(bam_path)[0]], stdin=p1.stdout)
+        p2 = subprocess.Popen(['samtools', 'sort', '-o', bam_path, '-'],
+                              stdin=p1.stdout)
         p1.stdout.close()
         p2.communicate()
 
