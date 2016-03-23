@@ -1,8 +1,8 @@
-from __future__ import (absolute_import, division,
-                        print_function, unicode_literals)
-from builtins import (ascii, bytes, chr, dict, filter, hex, input,
-                      int, map, next, oct, open, pow, range, round,
-                      str, super, zip)
+from __future__ import absolute_import, division, print_function
+
+#pylint: disable=wildcard-import,unused-wildcard-import,redefined-builtin
+from builtins import *
+#pylint: enable=wildcard-import,unused-wildcard-import,redefined-builtin
 
 import logging
 from itertools import chain, repeat
@@ -13,7 +13,7 @@ from rpy2.robjects.packages import importr
 
 from pyim.util.rpy2 import dataframe_to_pandas
 
-from ._util import select_closest
+from ..filtering import select_closest
 
 
 CHROM_MAP = dict(zip(

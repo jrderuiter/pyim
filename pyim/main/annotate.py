@@ -1,11 +1,17 @@
-from __future__ import (absolute_import, division,
-                        print_function, unicode_literals)
+from __future__ import absolute_import, division, print_function
+
+#pylint: disable=wildcard-import,unused-wildcard-import,redefined-builtin
+from builtins import *
+#pylint: enable=wildcard-import,unused-wildcard-import,redefined-builtin
 
 import argparse
 import logging
 
-from pyim.annotation import window, rbm, kcrbm, rbm_cis
+from pyim.annotation.annotator import window, rbm, rbm_cis
+
+# pylint: disable=import-error
 from ._logging import print_header, print_footer
+# pylint: enable=import-error
 
 
 def main():
@@ -20,7 +26,7 @@ def main():
     window.register(subparsers)
     rbm.register(subparsers)
     rbm_cis.register(subparsers)
-    kcrbm.register(subparsers)
+    # kcrbm.register(subparsers)
 
     # Parse args.
     args = parser.parse_args()
