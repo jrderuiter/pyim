@@ -1,6 +1,5 @@
 name: pyim
 dependencies:
-- python3.5
 - future
 - numpy
 - scipy
