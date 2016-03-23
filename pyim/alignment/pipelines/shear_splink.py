@@ -154,11 +154,17 @@ def shear_splink(reads, transposon, linker, barcodes,
 
     # Map barcodes to samples.
     if sample_map is not None:
+        logger.info('Mapping insertions to samples')
         insertions['sample'] = insertions['barcode'].map(sample_map)
 
     # Filter on (unique) depth.
     if min_depth is not None:
+        logger.info('Filtering insertions with depth < {}'.format(min_depth))
         insertions = insertions.ix[insertions['depth_unique'] >= min_depth]
+
+    # Annotate with clonality.
+    logger.info('Annotating insertions with (relative) clonality')
+    insertions = annotate_with_clonality(insertions)
 
     # Sort and assign ids to insertions.
     insertions.sort_values(by=['chrom', 'position'], inplace=True)
@@ -355,3 +361,18 @@ def _alignments_to_insertion(info, alignments, id_=None):
     depth_unique = len(set(end_positions))
 
     return id_, ref, pos, strand, bc, depth, depth_unique
+
+
+# --- Further annotation --- #
+
+def annotate_with_clonality(insertions):
+    def _clonality(grp):
+        clonality = grp['depth_unique'] / grp['depth_unique'].max()
+        return grp.assign(clonality=clonality)
+
+    if 'sample' in insertions.columns:
+        per_sample = insertions.groupby('sample')
+    else:
+        per_sample = insertions.groupby('barcode')
+
+    return pd.concat(_clonality(grp) for _, grp in per_sample)
