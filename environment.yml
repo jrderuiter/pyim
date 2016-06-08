@@ -1,4 +1,4 @@
-name: pyim
+name: pyim-dev
 dependencies:
 - future
 - numpy
