@@ -83,6 +83,7 @@ def feature_distance(insertion, feature):
 
     return dist
 
+
 def feature_orientation(insertion, feature):
     """Determines the relative orientation of an insertion and a feature.
 

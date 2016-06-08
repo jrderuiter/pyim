@@ -140,7 +140,7 @@ def main(args):
 
     # Read insertions.
     insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
-    logging.info('Read %d insertions', len(insertions))
+    logging.info('Read %d insertions', insertions['id'].nunique())
 
     # Annotate insertions.
     logging.info('Annotating insertions')

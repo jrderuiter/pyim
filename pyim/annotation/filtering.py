@@ -17,7 +17,7 @@ def select_closest(insertions, id_col='id', dist_col='distance'):
     """
 
     def _is_closest(x):
-        abs_dist = x[col].abs()
+        abs_dist = x[dist_col].abs()
         return x.ix[abs_dist == abs_dist.min()]
 
     return (insertions.groupby(id_col)

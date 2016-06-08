@@ -214,7 +214,7 @@ def register(subparsers, name='window'):
 def main(args):
     # Read annotation.
     insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
-    logging.info('Read %d insertions', len(insertions))
+    logging.info('Read %d insertions', insertions['id'].unique())
 
     # Define windows.
     logging.info('Annotating insertions')

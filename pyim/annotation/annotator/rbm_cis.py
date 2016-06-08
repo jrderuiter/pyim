@@ -18,7 +18,8 @@ from ..filtering import filter_blacklist, select_closest
 
 
 def annotate_rbm_cis(insertions, cis_sites, gtf, window_preset=None,
-                     window_sizes=None, collapse=False):
+                     window_sizes=None, blacklist=None, closest=False,
+                     collapse=False):
     """Assigns insertions to genes using the RBM approach via called CIS sites.
 
     Args:
@@ -59,10 +60,20 @@ def annotate_rbm_cis(insertions, cis_sites, gtf, window_preset=None,
                                    window_preset=window_preset,
                                    window_sizes=window_sizes)
 
+    if blacklist:
+        annotated_sites = filter_blacklist(annotated_sites, blacklist)
+
+    if closest:
+        annotated_sites = add_metadata(annotated_sites, gtf)
+        annotated_sites = select_closest(annotated_sites)
+
     # Extract and merge annotation with insertions.
     annotation = annotated_sites[['id', 'gene_id', 'gene_name']]
     annotation = annotation.rename(columns={'id': 'cis_id'})
     annotated_ins = pd.merge(insertions, annotation, on='cis_id', how='left')
+
+    # Add metadata to insertions.
+    annotated_ins = add_metadata(annotated_ins, gtf)
 
     if collapse:
         # Collapse multiple insertion entries resulting from CIS annotation.
@@ -129,29 +140,14 @@ def main(args):
     cis_sites = pd.read_csv(args.cis_sites, sep='\t', dtype={'chrom': str})
 
     logging.info('Read %d insertions and %d cis sites',
-                 len(insertions), len(cis_sites))
+                 insertions['id'].nunique(), len(cis_sites))
 
     # Annotate insertions.
     logging.info('Annotating insertions')
-
     annotated_ins, annotated_sites = annotate_rbm_cis(
         insertions, cis_sites, args.gtf, window_preset=args.preset,
-        window_sizes=args.window_sizes, collapse=args.collapse)
-
-    # Add metadata to annotated insertions.
-    logging.info('Adding annotation metadata')
-    annotated_ins = add_metadata(annotated_ins, args.gtf)
-
-    if args.blacklist is not None:
-        logging.info('Filtering blacklisted genes')
-        annotated_ins = filter_blacklist(annotated_ins, args.blacklist)
-        annotated_sites = filter_blacklist(annotated_sites, args.blacklist)
-
-    if args.closest:
-        logging.info('Selecting closest insertions')
-        annotated_ins = select_closest(annotated_ins)
-        annotated_sites = add_metadata(annotated_sites, args.gtf)
-        annotated_sites = select_closest(annotated_sites)
+        window_sizes=args.window_sizes, collapse=args.collapse,
+        blacklist=args.blacklist, closest=args.closest)
 
     # Write outputs.
     annotated_ins.to_csv(args.output, sep='\t', index=False)

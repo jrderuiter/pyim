@@ -11,6 +11,7 @@ from os import path
 
 def align(m1, index, output, m2=None, options=None,
           log=None, bam_output=False):
+    """Alignment with bowtie2."""
     options = {} or options
 
     # Inject inputs into options.
