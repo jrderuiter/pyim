@@ -1,16 +1,17 @@
-# pylint: disable=W0622,W0614,W0401
-from __future__ import absolute_import, division, print_function
-from builtins import *
-# pylint: enable=W0622,W0614,W0401
+"""Module containing model classes for fusions and insertions."""
 
 import collections
 
+from frozendict import frozendict
+import numpy as np
 import pandas as pd
 import toolz
 
 
 class MetadataFrameMixin(object):
     """Mixin class adding namedtuple/frame conversion support."""
+
+    _dtypes = {}
 
     @classmethod
     def _non_metadata_fields(cls):
@@ -22,27 +23,28 @@ class MetadataFrameMixin(object):
     def to_frame(cls, insertions):
         """Converts list of objects to a dataframe representation."""
 
-        rows = (cls._to_dict(ins) for ins in insertions)
+        # Check if insertions is empty.
+        is_empty, insertions = cls._is_empty(insertions)
 
-        df = pd.DataFrame.from_records(rows)
-        df = cls.format_frame(df)
+        if is_empty:
+            df = pd.DataFrame.from_records(
+                [], columns=cls._non_metadata_fields())
+        else:
+            rows = (cls._to_dict(ins) for ins in insertions)
+            df = pd.DataFrame.from_records(rows)
+            df = cls.format_frame(df)
 
         return df
 
-    @classmethod
-    def format_frame(cls, df):
-        """Ensures frame is properly formatted (column order etc.)"""
-        cls.check_frame(df)
-        return cls._reorder_columns(df, order=cls._non_metadata_fields())
+    @staticmethod
+    def _is_empty(iterable):
+        try:
+            _, iterable = toolz.peek(iterable)
+            empty = False
+        except StopIteration:
+            empty = True
 
-    @classmethod
-    def check_frame(cls, df):
-        basic_fields = cls._non_metadata_fields()
-        missing_columns = set(basic_fields) - set(df.columns)
-
-        if len(missing_columns) > 0:
-            raise ValueError('Missing required columns {}',
-                             ', '.join(missing_columns))
+        return empty, iterable
 
     @classmethod
     def _to_dict(cls, obj):
@@ -57,6 +59,26 @@ class MetadataFrameMixin(object):
         return df[col_order]
 
     @classmethod
+    def check_frame(cls, df):
+        missing = set(cls._non_metadata_fields()) - set(df.columns)
+        if len(missing) > 0:
+            raise ValueError('Missing required columns: {}'
+                             .format(', '.join(missing)))
+
+    @classmethod
+    def format_frame(cls, df):
+        cls.check_frame(df)
+
+        df2 = df.copy()
+
+        for col, dtype in cls._dtypes.items():
+            df2[col] = df[col].astype(dtype)
+
+        df2 = cls._reorder_columns(df, order=cls._non_metadata_fields())
+
+        return df2
+
+    @classmethod
     def from_frame(cls, df):
         """Converts dataframe into a list of objects."""
 
@@ -69,14 +91,36 @@ class MetadataFrameMixin(object):
             row_dict = row._asdict()
 
             metadata = {k: row_dict.pop(k) for k in metadata_fields}
+            metadata = frozendict(toolz.valfilter(_not_nan, metadata))
+
             row_dict.pop('Index', None)
 
-            yield cls(**row_dict, metadata=metadata)
+            if not set(basic_fields) == set(row_dict.keys()):
+                missing_fields = set(basic_fields) - set(row_dict.keys())
+                raise ValueError('Missing required fields ({})'
+                                 .format(', '.join(missing_fields)))
+
+            yield cls(metadata=metadata, **row_dict)
+
+    @classmethod
+    def from_csv(cls, file_path, as_frame=False, **kwargs):
+        df = pd.read_csv(file_path, dtype=cls._dtypes, **kwargs)
+        cls.check_frame(df)
+
+        if as_frame:
+            return df
+        else:
+            return cls.from_frame(df)
+
+    @classmethod
+    def to_csv(cls, file_path, insertions, index=False, **kwargs):
+        df = cls.to_frame(insertions)
+        df.to_csv(str(file_path), index=index, **kwargs)
 
 
-_Insertion = collections.namedtuple(
-    'Insertion', ['id', 'chromosome', 'position',
-                  'strand', 'metadata'])
+_Insertion = collections.namedtuple('Insertion',
+                                    ['id', 'chromosome', 'position', 'strand',
+                                     'support', 'metadata'])
 
 
 class Insertion(MetadataFrameMixin, _Insertion):
@@ -84,9 +128,28 @@ class Insertion(MetadataFrameMixin, _Insertion):
 
     __slots__ = ()
 
-    @classmethod
-    def format_frame(cls, df):
-        df = super().format_frame(df)
-        df['position'] = df['position'].astype(int)
-        df['strand'] = df['strand'].astype(int)
-        return df
+    _dtypes = {'chromosome': str}
+
+
+_CisSite = collections.namedtuple(
+    'CisSite', ['id', 'chromosome', 'position', 'strand', 'metadata'])
+
+
+class CisSite(MetadataFrameMixin, _CisSite):
+    """Model class representing an Common Insertion Site (CIS)."""
+
+    __slots__ = ()
+
+    _dtypes = {'chromosome': str}
+
+
+def _not_nan(value):
+    if value is None:
+        return False
+    elif isinstance(value, str) and value == '':
+        return False
+    else:
+        try:
+            return not np.isnan(value)
+        except TypeError:
+            return True

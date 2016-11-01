@@ -1,0 +1,77 @@
+{% set version = "0.2.0.dev0" %}
+
+package:
+  name: pyim
+  version: {{ version }}
+
+source:
+  path: ../
+
+build:
+  number: 0
+  skip: True # [py27]
+  rpaths:
+    - lib/R/lib/
+    - lib/
+
+requirements:
+  build:
+    - python
+    - setuptools
+
+    # Basic dependencies
+    - pandas ==0.18.1
+    - pyfaidx ==0.4.7.1
+    - pysam ==0.9.1
+    - toolz ==0.8.0
+    - tqdm
+    - intervaltree
+    - frozendict
+    - cutadapt
+
+    # R dependencies
+    - r
+    - r-cimpl
+    - rpy2 >=2.7.4
+
+  run:
+    - python
+
+    # Basic dependencies
+    - pandas ==0.18.1
+    - pyfaidx ==0.4.7.1
+    - pysam ==0.9.1
+    - toolz ==0.8.0
+    - tqdm
+    - intervaltree
+    - frozendict
+    - cutadapt
+
+    # R dependencies
+    - r
+    - r-cimpl
+    - rpy2 >=2.7.4
+
+    # External dependencies
+    - bowtie2
+
+test:
+    imports:
+      - pyim
+    commands:
+      - pyim-align --help > /dev/null
+      - pyim-annotate --help > /dev/null
+      - pyim-bed --help > /dev/null
+      - pyim-cis --help > /dev/null
+      - pyim-demultiplex --help > /dev/null
+      - pyim-merge --help > /dev/null
+      - pyim-split --help > /dev/null
+
+about:
+  home: http://www.github.com/jrderuiter/pyim
+  license: MIT License
+  summary: 'PyIM is a package for that implements a number of pipelines for
+    identifying transposon integration sites from targeted DNA-sequencing
+    of transposon insertions. The package implements a number of standard
+    pipelines used in our group, but also provides the basic build blocks
+    for custom pipelines.'

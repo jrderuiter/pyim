@@ -1,20 +1,12 @@
-from __future__ import (absolute_import, division,
-                        print_function, unicode_literals)
-
-# noinspection PyUnresolvedReferences
-from builtins import (ascii, bytes, chr, dict, filter, hex, input,
-                      int, map, next, oct, open, pow, range, round,
-                      str, super, zip)
-from future.utils import native_str
-
 import contextlib
 import itertools
 import os
 import subprocess
 
-import pysam
 import numpy as np
 import pandas as pd
+import pysam
+import toolz
 
 
 def _parse_float(value):
@@ -26,16 +18,26 @@ def _parse_float(value):
 
 def _reorder_columns(frame, order):
     columns = list(order)
-    extra_columns = sorted([c for c in frame.columns
-                            if c not in set(columns)])
+    extra_columns = sorted([c for c in frame.columns if c not in set(columns)])
     return frame[columns + extra_columns]
 
 
-def _get_region(frame, reference, start=None, end=None,
-                filters=None, incl_left=True, incl_right=True,
-                ref_col='contig', start_col='start', end_col='end'):
+def _get_region(frame,
+                reference,
+                start=None,
+                end=None,
+                filters=None,
+                incl_left=True,
+                incl_right=True,
+                ref_col='contig',
+                start_col='start',
+                end_col='end'):
+
+    mask = pd.Series(True, index=frame.index)
+
     # Filter on passed range.
-    mask = frame[ref_col] == reference
+    if reference is not None:
+        mask = frame[ref_col] == reference
 
     if start is not None:
         mask &= frame[start_col] <= end
@@ -73,41 +75,46 @@ def tabix(file_path, preset):
 
 
 class TabixIterator(object):
-
     def __init__(self, file_path, parser=None):
         self._file_path = file_path
         self._parser = parser
 
-    def fetch(self, reference=None, start=None, end=None,
-              filters=None, incl_left=True, incl_right=True):
-        file_obj = pysam.TabixFile(native_str(self._file_path),
-                                   parser=self._parser)
+    def fetch(self,
+              reference=None,
+              start=None,
+              end=None,
+              filters=None,
+              incl_left=True,
+              incl_right=True):
+        file_obj = pysam.TabixFile(str(self._file_path), parser=self._parser)
 
         with contextlib.closing(file_obj) as tb_file:
             if reference is not None:
-                reference = native_str(reference)
+                reference = str(reference)
 
-            records = self._fetch(tb_file, reference=reference,
-                                  start=start, end=end)
+            records = self._fetch(
+                tb_file, reference=reference, start=start, end=end)
 
             # Filter records on additional filters.
             if filters is not None:
                 for name, value in filters.items():
-                    records = (r for r in records
-                               if hasattr(r, name)
-                               and getattr(r, name) == value)
+                    records = self._apply_filter(records, name, value)
 
             # Filter inclusive/exclusive if needed.
             if not incl_left:
-                records = filter(lambda r: r.start > start, records)
+                records = (r for r in records if r.start > start)
 
             if not incl_right:
-                records = filter(lambda r: r.end < end, records)
+                records = (r for r in records if r.end < end)
 
             # Yield records.
             for record in records:
                 yield record
 
+    @staticmethod
+    def _apply_filter(records, name, value):
+        return (rec for rec in records
+                if hasattr(rec, name) and getattr(rec, name) == value)
 
     def _fetch(self, tb_file, reference=None, **kwargs):
         # For some reason pysam does not fetch all records if reference
@@ -115,9 +122,8 @@ class TabixIterator(object):
         # the contig records into one iterable.
         if reference is None:
             contigs = tb_file.contigs
-            records = itertools.chain.from_iterable(
-                (tb_file.fetch(reference=ref, **kwargs)
-                 for ref in contigs))
+            records = itertools.chain.from_iterable((tb_file.fetch(
+                reference=ref, **kwargs) for ref in contigs))
         else:
             records = tb_file.fetch(reference=reference, **kwargs)
 
@@ -126,28 +132,47 @@ class TabixIterator(object):
 
 
 class TabixFile(object):
-
     def __init__(self, file_path, parser):
         self._file_path = file_path
         self._iterator = TabixIterator(file_path, parser=parser)
 
-    def fetch(self, reference=None, start=None, end=None,
-              filters=None, incl_left=True, incl_right=True):
+    def fetch(self,
+              reference=None,
+              start=None,
+              end=None,
+              filters=None,
+              incl_left=True,
+              incl_right=True):
+        """Fetches records for the given region."""
         records = self._iterator.fetch(
-            reference=reference, start=start, end=end,
-            filters=filters, incl_left=incl_left, incl_right=incl_right)
+            reference=reference,
+            start=start,
+            end=end,
+            filters=filters,
+            incl_left=incl_left,
+            incl_right=incl_right)
 
-        for record in (self._to_series(r) for r in records):
-            yield record
+        for record in records:
+            yield self._to_dict(record)
 
-    def get_region(self, reference=None, start=None, end=None,
-                   filters=None, incl_left=True, incl_right=True):
-        records = self.fetch(reference, start, end, filters=filters,
-                             incl_left=incl_left, incl_right=incl_right)
+    def get_region(self,
+                   reference=None,
+                   start=None,
+                   end=None,
+                   filters=None,
+                   incl_left=True,
+                   incl_right=True):
+        """Fetches DataFrame of features for the given region."""
+        records = self.fetch(
+            reference,
+            start,
+            end,
+            filters=filters,
+            incl_left=incl_left,
+            incl_right=incl_right)
         return self._frame_constructor().from_records(records)
 
-    @classmethod
-    def _to_series(cls, record):
+    def _to_dict(self, record):
         raise NotImplementedError()
 
     @classmethod
@@ -156,30 +181,60 @@ class TabixFile(object):
 
 
 class TabixFrame(pd.DataFrame):
-
     @property
     def _constructor(self):
         raise NotImplementedError()
 
-    def fetch(self, reference=None, start=None, end=None,
-              filters=None, incl_left=True, incl_right=True):
-        raise NotImplementedError()
+    def fetch(self,
+              reference=None,
+              start=None,
+              end=None,
+              filters=None,
+              incl_left=True,
+              incl_right=True):
 
-    def get_region(self, reference=None, start=None, end=None,
-                   filters=None, incl_left=True, incl_right=True, **kwargs):
-        return _get_region(self, reference, start, end, filters=filters,
-                           incl_left=incl_left, incl_right=incl_right, **kwargs)
+        subset = self.get_region(
+            reference,
+            start,
+            end,
+            filters=filters,
+            incl_left=incl_left,
+            incl_right=incl_right)
+
+        for tup in subset.itertuples():
+            yield tup._asdict()
+
+    def get_region(self,
+                   reference=None,
+                   start=None,
+                   end=None,
+                   filters=None,
+                   incl_left=True,
+                   incl_right=True,
+                   **kwargs):
+        return _get_region(
+            self,
+            reference,
+            start,
+            end,
+            filters=filters,
+            incl_left=incl_left,
+            incl_right=incl_right,
+            **kwargs)
 
 
 class GtfFile(TabixFile):
 
-    TYPE_MAP = {3: int, 4: int, 5: _parse_float}
-
-    FIELDS = ('contig', 'source', 'feature', 'start',
-              'end', 'score', 'strand', 'frame', 'attribute')
+    FIELDS = ('contig', 'source', 'feature', 'start', 'end', 'score', 'strand',
+              'frame')
+    TYPES = {'start': int, 'end': int, 'score': _parse_float}
 
     def __init__(self, file_path):
         file_path = str(file_path)
+
+        if not os.path.exists(file_path):
+            raise IOError('File does not exist ({})'.format(file_path))
+
         if not file_path.endswith('.gz'):
             if os.path.exists(file_path + '.gz'):
                 file_path += '.gz'
@@ -188,20 +243,25 @@ class GtfFile(TabixFile):
 
         super().__init__(file_path, parser=pysam.asGTF())
 
-    @classmethod
-    def _to_series(cls, record):
-        rec_values = tuple((cls.TYPE_MAP.get(i, lambda x: x)(val)
-                            for i, val in enumerate(record)))
-        attr_keys, attr_values = zip(*dict(record).items())
-        return pd.Series(rec_values[:-1] + attr_values,
-                         index=cls.FIELDS[:-1] + attr_keys)
+    def _to_dict(self, record):
+        basic_attr = dict(zip(self.FIELDS, record))
+
+        for key, func in self.TYPES.items():
+            basic_attr[key] = func(basic_attr[key])
+
+        return toolz.merge(basic_attr, dict(record))
 
     @classmethod
     def _frame_constructor(cls):
         return GtfFrame
 
-    def get_gene(self, gene_id, feature_type='gene',
-                 field_name='gene_id', **kwargs):
+    def get_gene(self,
+                 gene_id,
+                 feature_type='gene',
+                 field_name='gene_id',
+                 **kwargs):
+        """Fetchs a given gene by id."""
+
         # Add feature filter to filters (if given).
         filters = kwargs.pop('filter', {})
         filters['feature'] = feature_type
@@ -209,7 +269,7 @@ class GtfFile(TabixFile):
         # Search for gene record.
         records = self._iterator.fetch(filters=filters, **kwargs)
         for record in records:
-            if record[native_str(field_name)] == gene_id:
+            if record[str(field_name)] == gene_id:
                 return self._to_series(record)
 
         raise ValueError('Gene {} does not exist'.format(gene_id))
@@ -239,11 +299,11 @@ class GtfFile(TabixFile):
 
     @classmethod
     def sort(cls, file_path, out_path):
-        """Sorts a gtf file by position, as required for tabix."""
+        """Sorts a gtf file by position, required for indexing by tabix."""
         with open(out_path, 'w') as out_file:
-            cmd = '(grep ^"#" {0}; grep -v ^"#" {0} ''| sort -k1,1 -k4,4n)'
-            subprocess.check_call(cmd.format(file_path),
-                                  stdout=out_file, shell=True)
+            cmd = '(grep ^"#" {0}; grep -v ^"#" {0} | sort -k1,1 -k4,4n)'
+            subprocess.check_call(
+                cmd.format(file_path), stdout=out_file, shell=True)
         return out_path
 
     def __repr__(self):
@@ -251,7 +311,6 @@ class GtfFile(TabixFile):
 
 
 class GtfFrame(TabixFrame):
-
     @property
     def _constructor(self):
         return GtfFrame
@@ -268,7 +327,7 @@ class GtfFrame(TabixFrame):
 
         # Handle empty case.
         if len(frame) == 0:
-            frame = pd.DataFrame([], columns=GtfFile.FIELDS[:-1])
+            frame = cls([], columns=GtfFile.FIELDS[:-1])
 
         return cls._format_frame(frame)
 
@@ -287,7 +346,7 @@ class GtfFrame(TabixFrame):
 
     def get_gene(self, gene_id):
         result = self.ix[((self['feature'] == 'gene') &
-                         (self['gene_id'] == gene_id))]
+                          (self['gene_id'] == gene_id))]
 
         if len(result) == 0:
             raise ValueError('Gene {} does not exist'.format(gene_id))

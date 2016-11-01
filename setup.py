@@ -1,54 +1,52 @@
-import sys
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-import setuptools
-import versioneer
+from setuptools import setup, find_packages
 
-INSTALL_REQUIRES = ['future', 'numpy', 'scipy', 'pandas', 'pysam',
-                    'rpy2', 'scikit-bio', 'toolz', 'tqdm', 'intervaltree']
+with open('README.rst') as readme_file:
+    readme = readme_file.read()
 
-EXTRAS_REQUIRE = {
-    'dev': ['sphinx', 'pytest', 'pytest-mock',
-            'pytest-datafiles', 'pytest-cov',
-            'pytest-helpers-namespace']
-}
+with open('HISTORY.rst') as history_file:
+    history = history_file.read()
 
+requirements = ['pyfaidx', 'intervaltree', 'tqdm', 'toolz', 'frozendict',
+                'rpy2']
 
-# Check setuptools version, as recommended by:
-# https://hynek.me/articles/conditional-python-dependencies/.
-if int(setuptools.__version__.split('.', 1)[0]) < 18:
-    assert 'bdist_wheel' not in sys.argv
+test_requirements = []
 
-    # Add pathlib for Pythons before 3.4.
-    if sys.version_info[0:2] < (3, 4):
-        INSTALL_REQUIRES.append('pathlib2')
-else:
-    EXTRAS_REQUIRE[":python_version<'3.4'"] = ['pathlib2']
-
-
-setuptools.setup(
+setup(
     name='pyim',
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
-    url='https://bitbucket.org/jrderuiter/pyim',
-    author='Julian de Ruiter',
+    version='0.2.0.dev0',
+    description="Tools for analyzing insertional mutagenesis data.",
+    long_description=readme + '\n\n' + history,
+    author="Julian de Ruiter",
     author_email='julianderuiter@gmail.com',
-    description='Predicts transposon insertion sites from DNA-seq data.',
-    license='BSD',
-    packages=setuptools.find_packages('src'),
+    url='https://github.com/jrderuiter/pyim',
+    packages=find_packages('src'),
     package_dir={'': 'src'},
     include_package_data=True,
+    install_requires=requirements,
+    license="MIT license",
+    zip_safe=False,
+    keywords='pyim',
+    classifiers=[
+        'Development Status :: 2 - Pre-Alpha',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: MIT License',
+        'Natural Language :: English',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+    ],
+    test_suite='tests',
+    tests_require=test_requirements,
     entry_points={'console_scripts': [
-        'pyim-align = pyim.main.align:main',
-        'pyim-merge = pyim.main.merge:main',
-        'pyim-merge-sets = pyim.main.merge_sets:main',
-        'pyim-annotate = pyim.main.annotate:main',
-        'pyim-cis = pyim.main.cis:main',
-        'pyim-plot = pyim.main.plot:main',
-        'pyim-gff = pyim.main.gff:main',
-        'pyim-split = pyim.main.split:main'
-    ]},
-    install_requires=INSTALL_REQUIRES,
-    extras_require=EXTRAS_REQUIRE,
-    zip_safe=True,
-    classifiers=[]
-)
+        'pyim-align = pyim.main.pyim_align:main',
+        'pyim-demultiplex = pyim.main.pyim_demultiplex:main',
+        'pyim-merge = pyim.main.pyim_merge:main',
+        'pyim-cis = pyim.main.pyim_cis:main',
+        'pyim-annotate = pyim.main.pyim_annotate:main',
+        'pyim-bed = pyim.main.pyim_bed:main',
+        'pyim-split = pyim.main.pyim_split:main'
+    ]})

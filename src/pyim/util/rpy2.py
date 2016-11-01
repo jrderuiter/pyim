@@ -2,7 +2,6 @@ from rpy2 import robjects
 from rpy2.robjects import pandas2ri
 from rpy2.rinterface import RNULLType
 
-
 pandas2ri.activate()
 
 
