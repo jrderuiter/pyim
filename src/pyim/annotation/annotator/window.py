@@ -1,131 +1,103 @@
+# pylint: disable=W0622,W0614,W0401
 from __future__ import absolute_import, division, print_function
-
-#pylint: disable=wildcard-import,unused-wildcard-import,redefined-builtin
 from builtins import *
-#pylint: enable=wildcard-import,unused-wildcard-import,redefined-builtin
+# pylint: enable=W0622,W0614,W0401
 
+import collections
 import itertools
-import logging
 
-import pandas as pd
-from intervaltree import IntervalTree
-from tqdm import tqdm
+import toolz
 
+from pyim.annotation import register_annotator
 from pyim.util.tabix import GtfFile
 
-# pylint: disable=import-error
-from ..filtering import filter_blacklist, select_closest
+# from ..filtering import filter_blacklist, select_closest
 from ..util import build_interval_trees, numeric_strand
-# pylint: enable=import-error
-
-def annotate_windows(insertions, gtf, windows):
-    """Assigns insertions to genes that fall within the given windows.
-
-    Args:
-        insertions (pandas.DataFrame): Insertions to annotate in DataFrame
-            format. The frame is expected to contain at least the
-            following columns: id, position, strand.
-        gtf (str or GtfFile): Path to gtf file containing gene features.
-            Alternatively, a GtfFile object may also be given instead of a path.
-        windows (list[Window]): List of windows to inspect for genes.
-
-    Returns:
-        pandas.DataFrame: Dataframe containing annotated insertions. Annotations
-            are added as columns 'gene_id' and 'gene_name', which respectively contain the id and name of the annotated gene. An extra column
-            'window' indicates which of the RBM windows was used for
-            the annotation.
-
-    """
-
-    if isinstance(gtf, str):
-        gtf = GtfFile(gtf)
-
-    # Build lookup trees.
-    trees = build_interval_trees(gtf)
-
-    # Generate queries (insertion/window combinations).
-    ins_gen = (row for _, row in insertions.iterrows())
-    queries = itertools.product(ins_gen, windows)
-
-    queries = tqdm(queries, unit='query',
-                   total=len(insertions) * len(windows))
-
-    # Generate annotation for queries and merge into frame.
-    annotations = (_annotate_window(ins, window, trees)
-                   for ins, window in queries)
-    annotation = pd.concat(annotations, ignore_index=True)
-
-    # Merge annotation with insertions.
-    annotated = pd.merge(insertions, annotation, on='id', how='left')
-
-    return annotated
 
 
-class Window(object):
-    """Class representing a (relative) window to inspect for genes.
+class WindowAnnotator(object):
 
-    The window may be an actual window corresponding to a real chromosome
-    location, in which case start and end represent the actual window
-    boundaries, and reference and strand represent the actual chromosome
-    and strand of the window.
+    def __init__(self, reference_gtf, windows):
+        if not isinstance(reference_gtf, GtfFile):
+            reference_gtf = GtfFile(reference_gtf)
 
-    Alternatively, the window may also represent a relative window. In this
-    case start is typically negative and end is typically positive, whilst
-    reference is typically omitted and strand is optional. This relative window
-    can be applied to an actual position using the apply method, which
-    effectively calculates the given window around that position.
+        self._windows = windows
+        self._gtf = reference_gtf
 
-    Args:
-        start (int): Start of the window.
-        end (int): End of the window.
-        reference (str): Chromosome of the window (optional).
-        strand (int): Relative strand of window (optional).
-        incl_left (bool): Whether to include partially (left)
-            overlapping features.
-        incl_right (bool): Whether to include partially (right)
-            overlapping features.
+        self._trees = None
 
-    """
+    @classmethod
+    def from_args(cls, args):
+        window_size = args.window_size // 2
+        windows = [Window(-window_size, window_size, strand=None,
+                          name=None, strict_left=False, strict_right=False)]
+        return cls(reference_gtf=args.reference_gtf, windows=windows)
 
-    def __init__(self, start, end, reference=None, strand=None,
-                 incl_left=True, incl_right=True, name=None):
-        self.reference = reference
-        self.start = start
-        self.end = end
-        self.strand = strand
+    @classmethod
+    def setup_args(cls, parser):
+        # Required arguments.
+        parser.add_argument('--reference_gtf', required=True)
 
-        self.incl_left = incl_left
-        self.incl_right = incl_right
+        # Optional arguments.
+        # parser.add_argument('--closest', default=False, action='store_true')
+        parser.add_argument('--window_size', default=20000, type=int)
 
-        self.name = name
+    def annotate(self, insertions):
+        if self._trees is None:
+            self._trees = build_interval_trees(self._gtf)
 
-    def apply(self, reference, location, strand):
-        """Applies a relative window to specific location and strand.
+        queries = itertools.product(insertions, self._windows)
+        annotated = itertools.chain.from_iterable(
+            (self._annotate(ins, window, self._trees)
+            for ins, window in queries))
 
-        For example, a relative window of Window(start=-1000, end=1000,
-        strand=-1) applied to position (2, 3000, -1) will become
-        Window(ref=2, start=2000, end=4000, strand=1).
+        return annotated 
 
-        Args:
-            reference (str): Chromosome name of the reference position.
-            location (int): Reference genomic position.
-            strand (int): Reference genomic strand.
+    def _annotate(self, ins, window, interval_trees):
+        # Identify overlapping features.
+        applied_window = window.apply(ins.chromosome, ins.position, ins.strand)
+        features = list(applied_window.get_overlap(interval_trees))
 
-        """
+        if len(features) > 0:
+            for feature in features:
+                feat_metadata = {'gene_id': feature['gene_id'],
+                                 'gene_name': feature['gene_name']}
 
+                if window.name is not None:
+                    feat_metadata['window'] = window.name
+
+                new_metadata = toolz.merge(ins.metadata, feat_metadata)
+
+                yield ins._replace(metadata=new_metadata)
+        else:
+            yield ins
+
+
+register_annotator('window', WindowAnnotator)
+
+
+_Window =collections.namedtuple(
+    'Window', ['start', 'end', 'strand', 'name',
+               'strict_left', 'strict_right'])
+
+
+class Window(_Window):
+    __slots__ = ()
+
+    def apply(self, chromosome, position, strand):
         # Determine start/end position.
         if strand == 1:
-            start = location + self.start
-            end = location + self.end
+            start = position + self.start
+            end = position + self.end
 
-            incl_left = self.incl_left
-            incl_right = self.incl_right
+            strict_left = self.strict_left
+            strict_right = self.strict_right
         elif strand == -1:
-            start = location - self.end
-            end = location - self.start
+            start = position - self.end
+            end = position - self.start
 
-            incl_right = self.incl_left
-            incl_left = self.incl_right
+            strict_right = self.strict_left
+            strict_left = self.strict_right
         else:
             raise ValueError('Unknown value for strand ({})'
                              .format(strand))
@@ -136,101 +108,39 @@ class Window(object):
         else:
             new_strand = None
 
-        return Window(start, end, reference, new_strand,
-                      incl_left, incl_right, name=self.name)
+        return AppliedWindow(chromosome, start, end, new_strand,
+                             self.name, strict_left, strict_right)
 
 
-def _annotate_window(insertion, window, feature_trees):
-    """Annotates insertion for features in trees using given window."""
-
-    # Apply window for insertion.
-    applied_window = window.apply(
-        insertion['chrom'], insertion['position'], insertion['strand'])
-
-    # Fetch features within window.
-    features = _fetch_in_window(feature_trees, applied_window)
-
-    # Extract feature values.
-    frame = pd.DataFrame.from_records(
-        ({'id': insertion['id'],
-          'gene_id': feature['gene_id'],
-          'gene_name': feature['gene_name']}
-         for feature in features))
-
-    # Include window name if known.
-    if window.name is not None:
-        frame['window'] = window.name
-
-    return frame
+_AppliedWindow = collections.namedtuple(
+    'AppliedWindow', ['chromosome', 'start', 'end', 'strand',
+                      'name', 'strict_left', 'strict_right'])
 
 
-def _fetch_in_window(trees, window):
-    """Fetches features within given window in the interval trees."""
+class AppliedWindow(_AppliedWindow):
+    __slots__ = ()
 
-    # Find overlapping features.
-    try:
-        tree = trees[window.reference]
-        overlap = tree[window.start:window.end]
-    except KeyError:
-        overlap = []
+    def get_overlap(self, interval_trees):
+        # Find overlapping features.
+        try:
+            tree = interval_trees[self.chromosome]
+            overlap = tree[self.start:self.end]
+        except KeyError:
+            overlap = []
 
-    # Extract features.
-    features = (interval[2] for interval in overlap)
+        # Extract features.
+        features = (interval[2] for interval in overlap)
 
-    # Filter inclusive/exclusive if needed.
-    if not window.incl_left:
-        features = (f for f in features if f['start'] > window.start)
+        # Filter inclusive/exclusive if needed.
+        if self.strict_left:
+            features = (f for f in features if f['start'] > self.start)
 
-    if not window.incl_right:
-        features = (f for f in features if f['end'] < window.end)
+        if self.strict_right:
+            features = (f for f in features if f['end'] < self.end)
 
-    # Filter for strand if needed.
-    if window.strand is not None:
-        features = (f for f in features
-                    if numeric_strand(f['strand']) == window.strand)
+        # Filter for strand if needed.
+        if self.strand is not None:
+            features = (f for f in features
+                        if numeric_strand(f['strand']) == self.strand)
 
-    return list(features)
-
-
-
-def register(subparsers, name='window'):
-    parser = subparsers.add_parser(name, help=name + ' help')
-
-    # Required arguments.
-    parser.add_argument('input')
-    parser.add_argument('output')
-    parser.add_argument('--gtf', required=True)
-
-    # Optional arguments.
-    parser.add_argument('--closest', default=False, action='store_true')
-    parser.add_argument('--window_size', default=20000, type=int)
-
-    # Set main for dispatch.
-    parser.set_defaults(main=main)
-
-    return parser
-
-
-def main(args):
-    # Read annotation.
-    insertions = pd.read_csv(args.input, sep='\t', dtype={'chrom': str})
-    logging.info('Read %d insertions', insertions['id'].unique())
-
-    # Define windows.
-    logging.info('Annotating insertions')
-    half_size = args.window_size // 2
-    window = Window(start=-half_size, end=half_size)
-
-    # Annotate insertions.
-    annotated = annotate_windows(insertions, args.gtf, [window])
-
-    if args.blacklist is not None:
-        logging.info('Filtering blacklisted genes')
-        annotated = filter_blacklist(annotated, args.blacklist)
-
-    if args.closest:
-        logging.info('Selecting closest genes')
-        annotated = select_closest(annotated)
-
-    # Merge annotation.
-    annotated.to_csv(args.output, sep='\t', index=False)
+        return features

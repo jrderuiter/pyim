@@ -1,29 +1,25 @@
-from __future__ import (absolute_import, division,
-                        print_function, unicode_literals)
-from builtins import (ascii, bytes, chr, dict, filter, hex, input,
-                      int, map, next, oct, open, pow, range, round,
-                      str, super, zip)
-from future.utils import native_str
+# pylint: disable=W0622,W0614,W0401
+from __future__ import absolute_import, division, print_function
+from builtins import *
+# pylint: enable=W0622,W0614,W0401
 
 import logging
 from argparse import ArgumentParser
 from pathlib import Path
+from collections import Counter
 
 import pandas as pd
 
-from pyim.util.insertions import subset_samples
+from pyim.model import Insertion
 from ._logging import print_header, print_footer
 
 
 def setup_parser():
     parser = ArgumentParser(prog='pyim-merge')
 
-    parser.add_argument('insertions', nargs='+', type=Path)
-    parser.add_argument('output', type=Path)
-
-    parser.add_argument('--names', nargs='+', default=None)
-    parser.add_argument('--samples', nargs='+', default=None)
-    # parser.add_argument('--complement', default=False, action='store_true')
+    parser.add_argument('--insertions', nargs='+', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--sample_names', nargs='+', default=None)
 
     return parser
 
@@ -36,50 +32,48 @@ def main():
     logger = logging.getLogger()
     print_header(logger, command='merge')
 
-    # Generate default names if none given.
-    if args.names is None:
-        names = ['Set{}'.format(i) for i in range(1, len(args.insertions) + 1)]
-    else:
-        names = args.names
-
-    # Read frames.
-    ins_frames, samples = [], set()
-    for (ins_path, name) in zip(args.insertions, names):
-        frame = pd.read_csv(str(ins_path), sep=native_str('\t'))
-
-        # Check for overlapping samples.
-        frame_samples = set(filter(bool, frame['sample']))
-        overlap = samples.intersection(frame_samples)
-
-        if len(overlap) > 0:
-            raise ValueError('Overlapping samples between frames ({})'
-                             .format(', '.join(overlap)))
-
-        samples = samples.union(frame_samples)
-
-        # Augment ids to avoid duplicates in merged frame.
-        if name != '':
-            frame['id'] = ['{}.{}'.format(name, id_)
-                           for id_ in frame['id']]
-        ins_frames.append(frame)
-
-    # Merge frames.
-    merged = pd.concat(ins_frames, ignore_index=True)
-
-    logger.info('Merging insertions for {} datasets, containing {} samples'
-                .format(len(args.insertions), merged['sample'].nunique()))
-
-    # Filter samples if needed.
-    if args.samples is not None:
-        logger.info('Subsetting dataset to {} samples'
-                    .format(len(args.samples)))
-        merged = subset_samples(merged, args.samples, logger=logger)
-
-    # Write output.
-    logging.info('Writing merged output')
-    merged.to_csv(str(args.output), sep=native_str('\t'), index=False)
+    # Read and merge frames.
+    merge_files(args.insertions, args.output, sample_names=args.sample_names)
 
     print_footer(logger)
+
+
+def merge_files(file_paths, output_path, sample_names=None):
+    if sample_names is None:
+        sample_names = [fp.stem for fp in file_paths]
+
+    ins_frames = (pd.read_csv(fp, sep='\t') for fp in file_paths)
+
+    merged = merge_frames(ins_frames, sample_names)
+    merged.to_csv(str(output_path), sep='\t', index=False)
+
+
+def merge_frames(insertion_frames, sample_names):
+    # Check sample names for duplicates.
+    duplicate_samples = [s for s, count in Counter(sample_names).items()
+                         if count > 1]
+
+    if len(duplicate_samples) > 1:
+        raise ValueError('Duplicate sample names given ({})'
+                         .format(', '.join(duplicate_samples)))
+
+    # Merge frames.
+    frames = []
+    for (frame, sample_name) in zip(insertion_frames, sample_names):
+        # Check if frame is valid.
+        Insertion.check_frame(frame)
+
+        # Augment frame with sample name.
+        frame = frame.copy()
+        frame['sample'] = sample_name
+        frame['id'] = (sample_name + '.') + frame['id']
+
+        frames.append(frame)
+
+    merged = pd.concat(frames, axis=0)
+    merged = Insertion.format_frame(merged)
+
+    return merged
 
 
 if __name__ == '__main__':

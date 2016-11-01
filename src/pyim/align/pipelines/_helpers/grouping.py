@@ -5,6 +5,8 @@ import operator
 import heapq
 import toolz
 
+from collections import namedtuple
+
 
 class PrioritySet(object):
 
@@ -99,6 +101,100 @@ def groupby_position(alignments):
             yield (fwd_grp[0].reference_start, 1), fwd_grp
         if len(rev_grp) > 0:
             yield (rev_grp[0].reference_end, -1), rev_grp
+
+
+GenomicPosition = namedtuple('GenomicPosition', 
+                             ['chromosome', 'position', 'strand'])
+
+
+def groupby_position_mate(alignments):
+    """ Groups alignments by their positions, grouping forward strand
+        alignments with the same start position and reverse strand
+        alignments with the same end position. Assumes alignments
+        are all on a single reference sequence.
+    """
+    # Setup our collections for tracking reads and positions.
+    #
+    # The priority set is used to track positions with alignment groups,
+    # ensuring that no position is listed twice (the set part) and
+    # always giving the lowest position first (the priority part).
+    #
+    # The alignment dict contains two lists for each position with at
+    # least one alignment, one for forward reads and one for reverse.
+    # Any alignments encountered as position x in orientation o are added
+    # to the corresponding entry dict[x][o] in the list, in which
+    # o is encoded as {0,1}, with 1 being for reverse strand alignments.
+    position_set = PrioritySet()
+    aln_dict = collections.defaultdict(lambda: ([], []))
+
+    # Only use proper pairs.
+    alignments = (aln for aln in alignments if aln.is_proper_pair)
+
+    # Limit ourselves to alignments from one chromosome (the first
+    # encountered), as sort is only valid with the same chromosome.
+    aln, alignments = toolz.peek(alignments)
+    ref_name = aln.reference_name
+    
+    alignments = itertools.takewhile(
+        lambda aln: aln.reference_name == ref_name, alignments)
+
+    # We match position on the first pair. The second is stored until
+    # needed and then returned together with the corresponding first pair.
+    second_pairs = {}
+
+    curr_pos = 0
+    for aln in alignments:
+        if aln.is_read2:
+            second_pairs[aln.query_name] = aln
+        else:
+            # Check our ordering.
+            if aln.reference_start < curr_pos:
+                raise ValueError('Alignments not ordered by position')
+
+            curr_pos = aln.reference_start
+
+            # Add current read to collections.
+            is_reverse = aln.is_reverse
+            ref_pos = aln.reference_end if is_reverse else curr_pos
+            aln_dict[ref_pos][bool(is_reverse)].append(aln)
+            position_set.push(ref_pos, ref_pos)
+
+            # Return any alignment groups before our current position.
+            try:
+                while position_set.first() < curr_pos:
+                    first_pos = position_set.pop()
+                    fwd_grp, rev_grp = aln_dict.pop(first_pos)
+
+                    if len(fwd_grp) > 0:
+                        fwd_mates = [second_pairs.pop(aln.query_name)
+                                     for aln in fwd_grp]
+                        fwd_pos = fwd_grp[0].reference_start
+                        yield (GenomicPosition(ref_name, fwd_pos, 1), 
+                               fwd_grp, fwd_mates)
+
+                    if len(rev_grp) > 0:
+                        rev_mates = [second_pairs.pop(aln.query_name)
+                                     for aln in rev_grp]
+                        rev_pos = rev_grp[0].reference_start
+                        yield (GenomicPosition(ref_name, rev_pos, 1), 
+                               rev_grp, rev_mates)
+    
+            except ValueError:
+                pass
+
+    # We're done, yield any remaining alignment groups.
+    for _ in range(len(position_set)):
+        fwd_grp, rev_grp = aln_dict.pop(position_set.pop())
+
+        if len(fwd_grp) > 0:
+            fwd_mates = [second_pairs.pop(aln.query_name) for aln in fwd_grp]
+            fwd_pos = fwd_grp[0].reference_start
+            yield (GenomicPosition(ref_name, fwd_pos, 1), fwd_grp, fwd_mates)
+
+        if len(rev_grp) > 0:
+            rev_mates = [second_pairs.pop(aln.query_name) for aln in rev_grp]
+            rev_pos = rev_grp[0].reference_start
+            yield (GenomicPosition(ref_name, rev_pos, 1), rev_grp, rev_mates)
 
 
 @toolz.curry

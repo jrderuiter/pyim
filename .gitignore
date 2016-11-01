@@ -8,3 +8,4 @@ htmlcov
 _legacy
 docs/_build
 RELEASE-VERSION
+/.vscode

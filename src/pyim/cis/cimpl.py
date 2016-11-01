@@ -6,10 +6,7 @@ from rpy2.robjects.packages import importr
 
 from pyim.util.rpy2 import pandas_to_dataframe, dataframe_to_pandas
 
-
-R_GENOMES = {
-    'mm10': 'BSgenome.Mmusculus.UCSC.mm10'
-}
+R_GENOMES = {'mm10': 'BSgenome.Mmusculus.UCSC.mm10'}
 
 
 def map_insertions(insertions, scales, genome, alpha=0.05, **kwargs):
@@ -28,9 +25,16 @@ def map_insertions(insertions, scales, genome, alpha=0.05, **kwargs):
     return cis, mapping
 
 
-def cimpl(insertions, scales, genome, system=None, pattern=None,
-          lhc_method='none', iterations=1000, chromosomes=None,
-          verbose=False, threads=1):
+def cimpl(insertions,
+          scales,
+          genome,
+          system=None,
+          pattern=None,
+          lhc_method='none',
+          iterations=1000,
+          chromosomes=None,
+          verbose=False,
+          threads=1):
     """Runs CIMPL on insertions (in CIMPL format)."""
 
     # Fill in chromosomes from data if not specified.
@@ -49,7 +53,7 @@ def cimpl(insertions, scales, genome, system=None, pattern=None,
     # Prepare chromosomes argument, adding 'chr' prefix and
     # converting to StrVector to pass to R.
     if not chromosomes[0].startswith('chr'):
-         chromosomes = ['chr' + c for c in chromosomes]
+        chromosomes = ['chr' + c for c in chromosomes]
 
     # Convert scales to IntVector if supplied as list.
     if type(scales) == list:
@@ -66,17 +70,21 @@ def cimpl(insertions, scales, genome, system=None, pattern=None,
     cimpl_r = importr('cimpl')
     cimpl_obj = cimpl_r.doCimplAnalysis(
         pandas_to_dataframe(insertions),
-        scales=scales, n_iterations=iterations,
-        lhc_method=lhc_method, threads=threads, BSgenome=genome_obj,
+        scales=scales,
+        n_iterations=iterations,
+        lhc_method=lhc_method,
+        threads=threads,
+        BSgenome=genome_obj,
         chromosomes=robjects.vectors.StrVector(chromosomes),
-        verbose=verbose, **extra_args)
+        verbose=verbose,
+        **extra_args)
 
     return cimpl_obj
 
 
 def convert_to_cimpl(insertions):
     # Extract and rename required columns.
-    cimpl_ins = insertions.ix[:, ['id', 'chrom', 'position', 'sample']]
+    cimpl_ins = insertions.ix[:, ['id', 'chromosome', 'position', 'sample']]
     cimpl_ins.columns = ['id', 'chr', 'location', 'sampleID']
 
     if 'depth_unique' in insertions:
@@ -115,8 +123,9 @@ def extract_cis(cimpl_obj, alpha=0.05, mul_test=True):
 
     # Convert cis to pandas and rename index.
     cis_frame = dataframe_to_pandas(cis_obj).reset_index()
-    cis_frame.rename(columns={'index': 'cis_id',
-                              'chromosome': 'seqname'}, inplace=True)
+    cis_frame.rename(
+        columns={'index': 'cis_id',
+                 'chromosome': 'seqname'}, inplace=True)
 
     # Convert columns to int types.
     for col in ['peak_location', 'start', 'end', 'width', 'n_insertions']:
@@ -126,19 +135,18 @@ def extract_cis(cimpl_obj, alpha=0.05, mul_test=True):
     cis_frame['seqname'] = cis_frame['seqname'].str.replace('chr', '')
 
     # Reorder columns.
-    cis_frame = cis_frame[['cis_id', 'seqname', 'start', 'end',
-                           'scale', 'p_value', 'n_insertions',
-                           'peak_location', 'peak_height', 'width']]
+    cis_frame = cis_frame[['cis_id', 'seqname', 'start', 'end', 'scale',
+                           'p_value', 'n_insertions', 'peak_location',
+                           'peak_height', 'width']]
 
     # Rename and reshuffle cis columns.
-    cis_frame = cis_frame.rename(
-        columns={'seqname': 'chrom',
-                 'peak_location': 'position',
-                 'peak_height': 'height'})
+    cis_frame = cis_frame.rename(columns={'seqname': 'chrom',
+                                          'peak_location': 'position',
+                                          'peak_height': 'height'})
 
     cis_frame = cis_frame[['cis_id', 'chrom', 'position', 'scale',
-                           'n_insertions', 'p_value', 'start', 'end',
-                           'height', 'width']]
+                           'n_insertions', 'p_value', 'start', 'end', 'height',
+                           'width']]
 
     return cis_frame
 
@@ -187,8 +195,10 @@ def merge_cis(cis_frame):
 
 
 def _expand_column(frame, col, delimiter):
-    exp = pd.concat((_expand_row(row, col=col, delimiter=delimiter)
-                     for _, row in frame.iterrows()), ignore_index=True)
+    exp = pd.concat(
+        (_expand_row(
+            row, col=col, delimiter=delimiter) for _, row in frame.iterrows()),
+        ignore_index=True)
     return exp[frame.columns]
 
 

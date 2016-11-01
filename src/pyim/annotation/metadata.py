@@ -44,14 +44,14 @@ def add_metadata(insertions, gtf):
     return pd.merge(insertions, metadata, on=['id', 'gene_id'], how='left')
 
 
-def _annotate_insertion(insertion, feature):
-    """Annotates a given insertion/feature combination."""
+def _annotate_insertion(insertion, gene):
+    """Annotates a given insertion/gene combination."""
 
     return {
         'id': insertion['id'],
         'gene_id': feature['gene_id'],
-        'distance': feature_distance(insertion, feature),
-        'orientation': feature_orientation(insertion, feature)
+        'gene_distance': feature_distance(insertion, gene),
+        'gene_orientation': feature_orientation(insertion, gene)
     }
 
 

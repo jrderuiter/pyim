@@ -40,6 +40,7 @@ setuptools.setup(
     entry_points={'console_scripts': [
         'pyim-align = pyim.main.align:main',
         'pyim-merge = pyim.main.merge:main',
+        'pyim-merge-sets = pyim.main.merge_sets:main',
         'pyim-annotate = pyim.main.annotate:main',
         'pyim-cis = pyim.main.cis:main',
         'pyim-plot = pyim.main.plot:main',
