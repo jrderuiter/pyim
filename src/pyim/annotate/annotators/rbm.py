@@ -18,7 +18,7 @@ class RbmAnnotator(Annotator):
                  preset=None,
                  closest=False,
                  blacklist=None,
-                 cis_sites=None):
+                 verbose=True):
         super().__init__()
 
         if window_sizes is None:
@@ -33,8 +33,8 @@ class RbmAnnotator(Annotator):
             reference_gtf,
             windows=windows,
             closest=closest,
-            blacklist=blacklist)
-        self._cis_sites = cis_sites
+            blacklist=blacklist,
+            verbose=verbose)
 
     @classmethod
     def configure_args(cls, parser):
@@ -93,5 +93,3 @@ class RbmCisAnnotator(CisAnnotator, RbmAnnotator):
 
 
 register_annotator('rbm', RbmCisAnnotator)
-
-# register_annotator('rbm', RbmAnnotator)

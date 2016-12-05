@@ -9,7 +9,7 @@ import toolz
 from pyim.util.tabix import GtfFile, GtfFrame
 
 from .base import Annotator, CisAnnotator, register_annotator
-from ..filter_ import select_closest, filter_blacklist
+from ..filter_ import select_closest
 from ..metadata import add_metadata
 from ..util import build_interval_trees, numeric_strand
 
@@ -77,10 +77,6 @@ class WindowAnnotator(Annotator):
         if self._closest:
             annotated = list(select_closest(annotated))
 
-        # Filter blacklist.
-        if self._blacklist is not None:
-            annotated = filter_blacklist(annotated, self._blacklist)
-
         return annotated
 
     def _annotate_insertion(self, insertion):
@@ -94,6 +90,10 @@ class WindowAnnotator(Annotator):
 
             hits |= {(feature['gene_id'], feature['gene_name'], window.name)
                      for feature in applied_window.get_overlap(trees)}
+
+        # Filter for blacklist.
+        if self._blacklist is not None:
+            hits = {hit for hit in hits if hit[1] not in self._blacklist}
 
         if len(hits) > 0:
             # Annotate insertion with overlapping genes.
@@ -175,10 +175,10 @@ class AppliedWindow(_AppliedWindow):
     __slots__ = ()
 
     def get_overlap(self, interval_trees):
-        # Find overlapping features.
+        # Find overlapping features (end-inclusive).
         try:
             tree = interval_trees[self.chromosome]
-            overlap = tree[self.start:self.end]
+            overlap = tree[self.start:self.end + 1]
         except KeyError:
             overlap = []
 

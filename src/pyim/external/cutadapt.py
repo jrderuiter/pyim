@@ -10,19 +10,6 @@ from . import util as shell
 def cutadapt(in1_path, out1_path, options, in2_path=None, out2_path=None):
     """Runs cutadapt using the given options."""
 
-    cmdline_args = _build_arguments(
-        in1_path, out1_path, options, in2_path=in2_path, out2_path=out2_path)
-
-    return shell.run(cmdline_args)
-
-
-def _build_arguments(in1_path=None,
-                     out1_path=None,
-                     options=None,
-                     in2_path=None,
-                     out2_path=None):
-    """Builds argument list for cutadapt."""
-
     in1_path = in1_path or '-'
     options = dict(options) if options is not None else {}
 
@@ -32,30 +19,13 @@ def _build_arguments(in1_path=None,
     if out2_path is not None:
         options['-p'] = str(out2_path)
 
-    cmdline_opts = shell.flatten_options(options)
-    cmdline_opts = ['cutadapt'] + cmdline_opts + [str(in1_path)]
+    cmdline_args = shell.flatten_options(options)
+    cmdline_args = ['cutadapt'] + cmdline_args + [str(in1_path)]
 
     if in2_path is not None:
-        cmdline_opts += [str(in2_path)]
+        cmdline_args += [str(in2_path)]
 
-    return cmdline_opts
-
-# def cutadapt_piped(input_path, output_path, options_list, log_paths=None):
-#     """Runs multiple cutadapt commands in a piped fashion."""
-
-#     arg_list = []
-#     for i, opts in enumerate(options_list):
-#         in_ = input_path if i == 0 else None
-#         out_ = output_path if i == (len(options_list) - 1) else None
-#         arg_list.append(_build_arguments(in_, out_, opts))
-
-#     if '-o' in arg_list[-1]:
-#         stdout = log_paths[-1]
-#         log_paths = log_paths[:-1] + [None]
-#     else:
-#         stdout = None
-
-#     shell.run_piped(arg_list, stdout=stdout, stderrs=log_paths)
+    return shell.run(cmdline_args)
 
 
 def demultiplex_samples(reads_path,
