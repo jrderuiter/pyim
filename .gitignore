@@ -9,3 +9,4 @@ _legacy
 docs/_build
 RELEASE-VERSION
 /.vscode
+/.cache

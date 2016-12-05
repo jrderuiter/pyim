@@ -14,12 +14,6 @@ def cutadapt(in1_path, out1_path, options, in2_path=None, out2_path=None):
         in1_path, out1_path, options, in2_path=in2_path, out2_path=out2_path)
 
     return shell.run(cmdline_args)
-    #process = subprocess.run(cmdline_args,
-    #                         stdout=subprocess.PIPE,
-    #                         stderr=subprocess.PIPE)
-    #process.check_returncode()
-
-    # return process
 
 
 def _build_arguments(in1_path=None,
