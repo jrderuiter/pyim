@@ -70,8 +70,10 @@ test:
 about:
   home: http://www.github.com/jrderuiter/pyim
   license: MIT License
-  summary: 'PyIM is a package for that implements a number of pipelines for
-    identifying transposon integration sites from targeted DNA-sequencing
-    of transposon insertions. The package implements a number of standard
-    pipelines used in our group, but also provides the basic build blocks
-    for custom pipelines.'
+  summary: 'PyIM (Python Insertional Mutagenesis) is a python package for
+    analyzing insertional mutagenesis data from targeted sequencing of
+    transposon insertion sites. The package provides several command line
+    tools for identifying insertions, calling common insertion sites (CISs)
+    and annotating insertions/CISs directly from the command line. It
+    also aims to provides the basic building blocks for implementing
+    new pipelines, CIS callers, etc.'
