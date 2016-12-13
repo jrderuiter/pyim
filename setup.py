@@ -12,7 +12,8 @@ with open('HISTORY.rst') as history_file:
 requirements = ['pyfaidx', 'intervaltree', 'tqdm', 'toolz', 'frozendict',
                 'rpy2']
 
-test_requirements = []
+test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
+                     'pytest-helpers-namespace']
 
 setup(
     name='pyim',
