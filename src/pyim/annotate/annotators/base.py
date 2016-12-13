@@ -59,7 +59,10 @@ class CisAnnotator(Annotator):
         """Pre-process cis sites, fixing unstrandedness etc."""
 
         # Copy CISs that are unstranded to both strands.
-        return list(self._expand_unstranded_sites(cis_sites))
+        if cis_sites is None:
+            return None
+        else:
+            return list(self._expand_unstranded_sites(cis_sites))
 
     @staticmethod
     def _expand_unstranded_sites(cis_sites):
