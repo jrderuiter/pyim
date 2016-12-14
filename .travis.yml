@@ -2,7 +2,6 @@ language: python
 
 python:
     # We don't actually use the Travis Python, but this keeps it organized.
-    - '3.3'
     - '3.4'
     - '3.5'
 
@@ -32,5 +31,5 @@ install:
 
 script: py.test --cov pyim --cov-report term-missing
 
-after_success:
-    - coveralls
+#after_success:
+#    - coveralls
