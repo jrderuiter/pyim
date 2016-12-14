@@ -10,7 +10,7 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = ['pyfaidx', 'intervaltree', 'tqdm', 'toolz', 'frozendict',
-                'rpy2']
+                'rpy2', 'numpy', 'pandas']
 
 test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
                      'pytest-helpers-namespace', 'python-coveralls']
