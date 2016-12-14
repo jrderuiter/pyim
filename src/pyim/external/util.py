@@ -95,12 +95,20 @@ def _close_stdstream(stdstream):
 def flatten_options(option_dict):
     """Flattens a dict of options into an argument list."""
 
+    # Iterate over keys in lexical order, so that we have a
+    # reproducible order of iteration (useful for tests).
+    opt_names = sorted(option_dict.keys())
+
+    # Flatten values.
     options = []
-    for opt_name, opt_value in option_dict.items():
+    for opt_name in opt_names:
+        opt_value = option_dict[opt_name]
+
         if isinstance(opt_value, (tuple, list)):
-            options += [str(v) for v in opt_value]
+            options += [opt_name] + [str(v) for v in opt_value]
         elif opt_value is True:
             options += [opt_name]
         elif not (opt_value is False or opt_value is None):
             options += [opt_name, str(opt_value)]
+
     return options

@@ -4,7 +4,11 @@ from pathlib import Path
 def build_path(file_path, suffix='', dir_=None, ext=None):
     file_path = Path(file_path)
 
-    ext = ext or file_path.suffixes[-1]
+    try:
+        ext = ext or file_path.suffixes[-1]
+    except IndexError:
+        ext = ''
+
     suffix = suffix + ext
     new_path = file_path.with_suffix(suffix)
 
