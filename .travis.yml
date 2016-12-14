@@ -23,11 +23,12 @@ install:
     # Create conda environment.
     - conda create -q -n test python=$TRAVIS_PYTHON_VERSION
     - source activate test
-    - pip install .
+
+    # Install dependencies.
+    - conda install -c r -c bioconda r
+    - pip install .[test]
 
     # Install test dependencies.
-    - conda install pytest
-    - pip install pytest-cov python-coveralls
 
 script: py.test --cov pyim --cov-report term-missing
 

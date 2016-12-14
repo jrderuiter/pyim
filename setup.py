@@ -13,7 +13,7 @@ requirements = ['pyfaidx', 'intervaltree', 'tqdm', 'toolz', 'frozendict',
                 'rpy2']
 
 test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
-                     'pytest-helpers-namespace']
+                     'pytest-helpers-namespace', 'python-coveralls']
 
 setup(
     name='pyim',
@@ -40,8 +40,9 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
     ],
-    test_suite='tests',
-    tests_require=test_requirements,
+    extras_require={
+        'test': test_requirements
+    },
     entry_points={'console_scripts': [
         'pyim-align = pyim.main.pyim_align:main',
         'pyim-demultiplex = pyim.main.pyim_demultiplex:main',
