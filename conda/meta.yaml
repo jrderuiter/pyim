@@ -20,37 +20,35 @@ requirements:
     - setuptools
 
     # Basic dependencies
-    - pandas ==0.18.1
-    - pyfaidx ==0.4.7.1
-    - pysam ==0.9.1
-    - toolz ==0.8.0
+    - pandas >=0.18.1
+    - pyfaidx >=0.4.8.1
+    - pysam >=0.9.1
+    - toolz >=0.8.0
     - tqdm
     - intervaltree
-    - frozendict
     - cutadapt
 
     # R dependencies
     - r
     - r-cimpl
-    - rpy2 >=2.7.4
+    - rpy2 >=2.8.2
 
   run:
     - python
 
     # Basic dependencies
-    - pandas ==0.18.1
-    - pyfaidx ==0.4.7.1
-    - pysam ==0.9.1
-    - toolz ==0.8.0
+    - pandas >=0.18.1
+    - pyfaidx >=0.4.8.1
+    - pysam >=0.9.1
+    - toolz >=0.8.0
     - tqdm
     - intervaltree
-    - frozendict
     - cutadapt
 
     # R dependencies
     - r
     - r-cimpl
-    - rpy2 >=2.7.4
+    - rpy2 >=2.8.2
 
     # External dependencies
     - bowtie2

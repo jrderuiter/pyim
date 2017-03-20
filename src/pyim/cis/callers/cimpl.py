@@ -100,7 +100,7 @@ class CimplCisCaller(CisCaller):
             scales=robjects.vectors.IntVector(self._scales),
             n_iterations=self._iterations,
             lhc_method=self._lhc_method,
-            threads=self._threads,
+            cores=self._threads,
             BSgenome=genome_obj,
             chromosomes=robjects.vectors.StrVector(self._chromosomes),
             verbose=1)

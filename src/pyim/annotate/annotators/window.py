@@ -2,7 +2,7 @@ import collections
 import itertools
 from pathlib import Path
 
-from frozendict import frozendict
+from pyim.util.frozendict import frozendict
 from tqdm import tqdm
 import toolz
 

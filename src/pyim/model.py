@@ -2,7 +2,7 @@
 
 import collections
 
-from frozendict import frozendict
+from pyim.util.frozendict import frozendict
 import numpy as np
 import pandas as pd
 import toolz

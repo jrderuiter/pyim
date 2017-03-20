@@ -1,6 +1,6 @@
 import argparse
 
-from frozendict import frozendict
+from pyim.util.frozendict import frozendict
 import toolz
 
 from pyim.cis import get_callers

@@ -1,5 +1,5 @@
 import pytest
-from frozendict import frozendict
+from pyim.util.frozendict import frozendict
 
 from pyim.model import Insertion, CisSite
 

@@ -4,7 +4,7 @@ import itertools
 import operator
 from pathlib import Path
 
-from frozendict import frozendict
+from pyim.util.frozendict import frozendict
 import numpy as np
 import toolz
 

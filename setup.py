@@ -9,8 +9,8 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['pyfaidx', 'intervaltree', 'tqdm', 'toolz', 'frozendict',
-                'rpy2', 'numpy', 'pandas', 'pysam']
+requirements = ['pyfaidx', 'intervaltree', 'tqdm', 'toolz', 'rpy2', 'numpy',
+                'pandas', 'pysam']
 
 test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
                      'pytest-helpers-namespace', 'python-coveralls']
