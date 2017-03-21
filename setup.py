@@ -17,7 +17,7 @@ test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
 
 setup(
     name='pyim',
-    version='0.2.0.dev0',
+    version='0.2.0',
     description="Tools for analyzing insertional mutagenesis data.",
     long_description=readme + '\n\n' + history,
     author="Julian de Ruiter",
