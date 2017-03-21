@@ -9,8 +9,9 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['pyfaidx', 'intervaltree', 'tqdm', 'toolz', 'rpy2', 'numpy',
-                'pandas', 'pysam']
+requirements = ['pyfaidx>=0.4.8.1', 'intervaltree>=2.1', 'tqdm>=4.7',
+                'toolz>=0.8', 'rpy2>=2.8.2', 'numpy', 'pandas>=0.18',
+                'pysam>=0.9']
 
 test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
                      'pytest-helpers-namespace', 'python-coveralls']
@@ -18,24 +19,24 @@ test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
 setup(
     name='pyim',
     version='0.2.0',
-    description="Tools for analyzing insertional mutagenesis data.",
+    description=('Tool for identifying transposon insertions '
+                 'from targeted DNA-sequencing data.'),
     long_description=readme + '\n\n' + history,
-    author="Julian de Ruiter",
+    author='Julian de Ruiter',
     author_email='julianderuiter@gmail.com',
     url='https://github.com/jrderuiter/pyim',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     include_package_data=True,
     install_requires=requirements,
-    license="MIT license",
+    license='MIT license',
     zip_safe=False,
     keywords='pyim',
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
-        'Intended Audience :: Developers',
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
