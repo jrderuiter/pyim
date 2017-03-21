@@ -1,3 +1,5 @@
+"""Module with functions for calling cutadapt."""
+
 import itertools
 from pathlib import Path
 import shutil
@@ -19,7 +21,7 @@ def cutadapt(in1_path, out1_path, options, in2_path=None, out2_path=None):
     if out2_path is not None:
         options['-p'] = str(out2_path)
 
-    cmdline_args = shell.flatten_options(options)
+    cmdline_args = shell.flatten_arguments(options)
     cmdline_args = ['cutadapt'] + cmdline_args + [str(in1_path)]
 
     if in2_path is not None:

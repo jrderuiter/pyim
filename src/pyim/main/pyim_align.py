@@ -17,12 +17,9 @@ def main():
 
     # Run pipeline.
     pipeline = args.pipeline.from_args(args)
-    insertions = pipeline.run(reads_path=args.reads,
-                              work_dir=args.output.parent)
-
-    # Write insertions to output file.
-    ins_frame = Insertion.to_frame(insertions)
-    ins_frame.to_csv(str(args.output), sep='\t', index=False)
+    pipeline.run(reads_path=args.reads,
+                 output_dir=args.output_dir,
+                 reads2_path=args.reads2)
 
 
 def parse_args():

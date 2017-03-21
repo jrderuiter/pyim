@@ -7,14 +7,16 @@ from cutadapt import seqio
 import pandas as pd
 
 from pyim.external import bowtie2
-from pyim.external.util import flatten_options
-from pyim.util.path import build_path
+from pyim.external.util import flatten_arguments
+from pyim.model import Insertion
 
 from ..common import genomic as cm_gen, insertions as cm_ins
 from .base import Pipeline, register_pipeline
 
 
-class SinglePipeline(Pipeline):
+class ShearSplinkPipeline(Pipeline):
+    """ShearSplink pipeline."""
+
     def __init__(self,
                  transposon_path,
                  bowtie_index_path,
@@ -71,7 +73,7 @@ class SinglePipeline(Pipeline):
         parser.add_argument('--linker_overlap', default=3, type=int)
 
     @classmethod
-    def extract_args(cls, args):
+    def _extract_args(cls, args):
         bowtie_options = {'--local': args.local}
 
         min_overlaps = {
@@ -99,11 +101,15 @@ class SinglePipeline(Pipeline):
             min_overlaps=min_overlaps,
             error_rates=error_rates)
 
-    def run(self, reads_path, work_dir):
+    def run(self, reads_path, output_dir, reads2_path=None):
+        if reads2_path is not None:
+            raise ValueError('Pipeline does not support paired-end data')
+
         logger = logging.getLogger()
 
         # Extract genomic sequences and align to reference.
-        alignment_path = self._extract_and_align(reads_path, work_dir, logger)
+        alignment_path = self._extract_and_align(reads_path, output_dir,
+                                                 logger)
 
         # Extract alignment groups (grouped by position) from bam file.
         logger.info('Summarizing alignments')
@@ -118,12 +124,20 @@ class SinglePipeline(Pipeline):
         logger.info('  %-18s: %d', 'Minimum support', self._min_support)
         logger.info('  %-18s: %d', 'Merge distance', self._merge_distance)
 
-        yield from cm_ins.convert_groups_to_insertions(
+        insertions = cm_ins.convert_groups_to_insertions(
             aln_summary,
             min_support=self._min_support,
             merge_distance=self._merge_distance)
 
-    def _extract_and_align(self, reads_path, work_dir, logger):
+        # Write insertions to output file.
+        insertion_path = output_dir / 'insertions.txt'
+
+        ins_frame = Insertion.to_frame(insertions)
+        ins_frame.to_csv(str(insertion_path), sep='\t', index=False)
+
+    def _extract_and_align(self, reads_path, output_dir, logger):
+        output_dir.mkdir(exist_ok=True, parents=True)
+
         # Extract genomic sequences.
         logger.info('Extracting genomic sequences')
         logger.info('  %-18s: %s', 'Transposon',
@@ -133,8 +147,7 @@ class SinglePipeline(Pipeline):
                     shorten_path(self._contaminant_path))
         logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
-        genomic_path = build_path(reads_path, dir_=work_dir, suffix='.genomic')
-        genomic_path.parent.mkdir(exist_ok=True, parents=True)
+        genomic_path = output_dir / ('genomic' + reads_path.suffixes[-1])
 
         cm_gen.extract_genomic(
             reads_path,
@@ -150,10 +163,9 @@ class SinglePipeline(Pipeline):
         logger.info('Aligning to reference')
         logger.info('  %-18s: %s', 'Reference', shorten_path(self._index_path))
         logger.info('  %-18s: %s', 'Bowtie options',
-                    flatten_options(self._bowtie_options))
+                    flatten_arguments(self._bowtie_options))
 
-        alignment_path = build_path(reads_path, dir_=work_dir, ext='.bam')
-        alignment_path.parent.mkdir(exist_ok=True, parents=True)
+        alignment_path = output_dir / 'alignment.bam'
 
         bowtie2.bowtie2(
             [genomic_path],
@@ -165,10 +177,12 @@ class SinglePipeline(Pipeline):
         return alignment_path
 
 
-register_pipeline(name='single', pipeline=SinglePipeline)
+register_pipeline(name='shearsplink', pipeline=ShearSplinkPipeline)
 
 
-class SingleMultiplexedPipeline(SinglePipeline):
+class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
+    """ShearSplink pipeline with multiplexed reads."""
+
     def __init__(self,
                  transposon_path,
                  bowtie_index_path,
@@ -208,8 +222,8 @@ class SingleMultiplexedPipeline(SinglePipeline):
             '--barcode_mapping', required=False, type=Path, default=None)
 
     @classmethod
-    def extract_args(cls, args):
-        arg_dict = super().extract_args(args)
+    def _extract_args(cls, args):
+        arg_dict = super()._extract_args(args)
 
         if args.barcode_mapping is not None:
             map_df = pd.read_csv(args.barcode_mapping, sep='\t')
@@ -222,11 +236,15 @@ class SingleMultiplexedPipeline(SinglePipeline):
 
         return arg_dict
 
-    def run(self, reads_path, work_dir):
+    def run(self, reads_path, output_dir, reads2_path=None):
+        if reads2_path is not None:
+            raise ValueError('Pipeline does not support paired-end data')
+
         logger = logging.getLogger()
 
         # Extract genomic sequences and align to reference.
-        alignment_path = self._extract_and_align(reads_path, work_dir, logger)
+        alignment_path = self._extract_and_align(reads_path, output_dir,
+                                                 logger)
 
         # Map reads to specific barcodes/samples.
         logger.info('Extracting barcode/sample mapping')
@@ -249,7 +267,7 @@ class SingleMultiplexedPipeline(SinglePipeline):
         # adding sample name and sample prefix to the ID.
         logger.info('Converting to insertions')
         logger.info('  %-18s: %d', 'Minimum support', self._min_support)
-        logger.info('  %-18s: %d', 'Merge distance', self._merge_distance)
+        logger.info('  %-18s: %s', 'Merge distance', self._merge_distance)
 
         insertion_grps = (
             cm_ins.convert_summary_to_insertions(
@@ -261,7 +279,13 @@ class SingleMultiplexedPipeline(SinglePipeline):
             for barcode, aln_summ in aln_summaries.items()) # yapf: disable
 
         # Return concatenated list of insertions.
-        yield from itertools.chain.from_iterable(insertion_grps)
+        insertions = itertools.chain.from_iterable(insertion_grps)
+
+        # Write insertions to output file.
+        insertion_path = output_dir / 'insertions.txt'
+
+        ins_frame = Insertion.to_frame(insertions)
+        ins_frame.to_csv(str(insertion_path), sep='\t', index=False)
 
     def _get_barcode_mapping(self, reads_path):
         # Read barcode sequences.
@@ -275,9 +299,15 @@ class SingleMultiplexedPipeline(SinglePipeline):
 
 
 register_pipeline(
-    name='single-multiplexed', pipeline=SingleMultiplexedPipeline)
+    name='shearsplink-multiplexed', pipeline=MultiplexedShearSplinkPipeline)
 
 
 def shorten_path(file_name, limit=40):
-    f = os.path.split(str(file_name))[1]
-    return "%s~%s" % (f[:3], f[-(limit - 3):]) if len(f) > limit else f
+    """Shorten path for str to limit for logging."""
+
+    name = os.path.split(str(file_name))[1]
+
+    if len(name) > limit:
+        return "%s~%s" % (name[:3], name[-(limit - 3):])
+    else:
+        return name
