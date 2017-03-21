@@ -1,0 +1,33 @@
+name: pyim-dev
+channels:
+  - bioconda
+  - r
+  - defaults
+  - conda-forge
+  - jrderuiter
+dependencies:
+  # Basic dependencies
+  - python=3.5.*
+  - setuptools
+  - pandas >=0.18.1
+  - pyfaidx >=0.4.8.1
+  - pysam >=0.9.1
+  - toolz >=0.8.0
+  - tqdm
+  - intervaltree
+  - cutadapt =1.12
+  - bowtie2 =2.3.0
+
+  # R dependencies
+  - r-base =3.3.1
+  - r-cimpl
+  - rpy2 >=2.8.2
+
+  # Dev dependencies
+  - pytest
+  - pytest-cov =2.3.1
+  - pytest-mock =1.1
+  - python-coveralls =2.9.*
+
+  - pip:
+    - pytest-helpers-namespace

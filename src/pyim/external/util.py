@@ -13,9 +13,10 @@ def run(args, stdout=None, stderr=None, check=True):
     ----------
     args : List[str]
         Arguments for launching the process, passed as a list.
-    stdout and stderr: Union[Path, int]
-        These specify the executed programs' standard
-        input, standard output and standard error file handles, respectively.
+    stdout : Union[Path, int]
+        Specifies the standard output handle for the process.
+    stdout : Union[Path, int]
+        Specifies the standard error handle for the processe.
     check : bool
         Whether to check the returncode of the process.
 
@@ -59,7 +60,25 @@ def _close_stdstream(stdstream):
 
 
 def run_piped(args_list, stdout=None, stderrs=None, check=True):
-    """Runs piped commands for given argument lists."""
+    """Runs piped command for given list of arguments.
+
+    Parameters
+    ----------
+    args : List[str]
+        Arguments for launching the process, passed as a list.
+    stdout : Union[Path, int]
+        Specifies the standard output handle for the final process.
+    stdout : List[Union[Path, int]]
+        Specifies the standard error handles for the processes.
+    check : bool
+        Whether to check the returncode of the process.
+
+    Returns
+    -------
+    subprocess.Popen
+        Handle to completed process.
+
+    """
 
     if len(args_list) < 2:
         raise ValueError('At least two sets of arguments should be given')
