@@ -10,8 +10,12 @@ from pyim.external import bowtie2
 from pyim.external.util import flatten_arguments
 from pyim.model import Insertion
 
-from ..common import genomic as cm_gen, insertions as cm_ins
+from ..common.genomic import extract_genomic
+from ..common import insertions as cm_ins
 from .base import Pipeline, register_pipeline
+
+DEFAULT_OVERLAP = 3
+DEFAULT_ERROR_RATE = 0.1
 
 
 class ShearSplinkPipeline(Pipeline):
@@ -147,11 +151,9 @@ class ShearSplinkPipeline(Pipeline):
                     shorten_path(self._contaminant_path))
         logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
-        genomic_path = output_dir / ('genomic' + reads_path.suffixes[-1])
-
-        cm_gen.extract_genomic(
+        genomic_path = extract_genomic(
             reads_path,
-            genomic_path,
+            output_dir,
             transposon_path=self._transposon_path,
             linker_path=self._linker_path,
             contaminant_path=self._contaminant_path,

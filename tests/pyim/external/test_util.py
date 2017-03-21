@@ -27,6 +27,8 @@ class TestRun(object):
 
 
 class TestRunPiped(object):
+    """Unit tests for the run_piped function."""
+
     def test_simple(self):
         """Tests a simple piped command."""
 
