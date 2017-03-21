@@ -1,3 +1,5 @@
+"""Module with functions for calling bowtie2."""
+
 import sys
 
 from . import util as shell
@@ -41,7 +43,7 @@ def bowtie2(in1_paths,
     options['-x'] = str(index_path)
 
     # Build bowtie2 arguments.
-    bowtie_args = ['bowtie2'] + shell.flatten_options(options)
+    bowtie_args = ['bowtie2'] + shell.flatten_arguments(options)
 
     # Sort arguments for samtools.
     sort_args = ['samtools', 'sort', '-o', str(output_path), '-']
