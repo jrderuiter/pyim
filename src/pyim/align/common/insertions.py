@@ -3,12 +3,12 @@ import itertools
 import logging
 import operator
 
-from pyim.util.frozendict import frozendict
 import numpy as np
 import pysam
 import toolz
 
 from pyim.model import Insertion
+from pyim.util.frozendict import frozendict
 
 
 def fetch_alignments(bam_path, only_primary=True, min_mapq=None):

@@ -9,14 +9,14 @@ import pyfaidx
 from . import util as shell
 
 
-def cutadapt(in1_path, out1_path, options, in2_path=None, out2_path=None):
+def cutadapt(read_path, out_path, options, read2_path=None, out2_path=None):
     """Runs cutadapt using the given options."""
 
-    in1_path = in1_path or '-'
+    in1_path = read_path or '-'
     options = dict(options) if options is not None else {}
 
-    if out1_path is not None:
-        options['-o'] = str(out1_path)
+    if out_path is not None:
+        options['-o'] = str(out_path)
 
     if out2_path is not None:
         options['-p'] = str(out2_path)
@@ -24,13 +24,13 @@ def cutadapt(in1_path, out1_path, options, in2_path=None, out2_path=None):
     cmdline_args = shell.flatten_arguments(options)
     cmdline_args = ['cutadapt'] + cmdline_args + [str(in1_path)]
 
-    if in2_path is not None:
-        cmdline_args += [str(in2_path)]
+    if read2_path is not None:
+        cmdline_args += [str(read2_path)]
 
     return shell.run(cmdline_args)
 
 
-def demultiplex_samples(reads_path,
+def demultiplex_samples(read_path,
                         output_dir,
                         barcode_path,
                         error_rate=0.0,
@@ -58,12 +58,12 @@ def demultiplex_samples(reads_path,
     if sample_mapping is None:
         # Directly de-multiplex using barcodes.
         sample_paths = _demultiplex(
-            reads_path, output_dir, barcode_path, error_rate=error_rate)
+            read_path, output_dir, barcode_path, error_rate=error_rate)
     else:
         # First demultiplex to barcodes in temp dir.
         tmp_dir = output_dir / '_barcodes'
         barcode_paths = _demultiplex(
-            reads_path, tmp_dir, barcode_path, error_rate=error_rate)
+            read_path, tmp_dir, barcode_path, error_rate=error_rate)
 
         # Then rename files using mapping and delete files for unused barcodes.
         sample_paths = {}
@@ -85,7 +85,7 @@ def demultiplex_samples(reads_path,
     return sample_paths
 
 
-def _demultiplex(reads_path, output_dir, barcode_path, error_rate):
+def _demultiplex(read_path, output_dir, barcode_path, error_rate):
     """Runs cutadapt to de-multiplex reads into seperate files per barcode."""
 
     output_dir.mkdir(parents=True)
@@ -94,8 +94,8 @@ def _demultiplex(reads_path, output_dir, barcode_path, error_rate):
     options = {'-g': 'file:' + str(barcode_path),
                '--discard-untrimmed': True,
                '-e': error_rate}
-    output_base = output_dir / ('{name}' + reads_path.suffixes[-1])
-    cutadapt(reads_path, output_base, options=options)
+    output_base = output_dir / ('{name}' + read_path.suffixes[-1])
+    cutadapt(read_path, output_base, options=options)
 
     # Identify output files.
     barcode_keys = pyfaidx.Fasta(str(barcode_path)).keys()
