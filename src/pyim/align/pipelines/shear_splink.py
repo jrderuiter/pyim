@@ -1,6 +1,5 @@
 import itertools
 import logging
-import os
 from pathlib import Path
 
 from cutadapt import seqio
@@ -10,6 +9,7 @@ import pysam
 from pyim.external import bowtie2
 from pyim.external.util import flatten_arguments
 from pyim.model import Insertion
+from pyim.util.path import shorten_path
 
 from ..common.genomic import extract_genomic
 from ..common.insertions import extract_insertions
@@ -142,10 +142,10 @@ class ShearSplinkPipeline(Pipeline):
         # Extract genomic sequences.
         logger.info('Extracting genomic sequences')
         logger.info('  %-18s: %s', 'Transposon',
-                    _shorten_path(self._transposon_path))
-        logger.info('  %-18s: %s', 'Linker', _shorten_path(self._linker_path))
+                    shorten_path(self._transposon_path))
+        logger.info('  %-18s: %s', 'Linker', shorten_path(self._linker_path))
         logger.info('  %-18s: %s', 'Contaminants',
-                    _shorten_path(self._contaminant_path))
+                    shorten_path(self._contaminant_path))
         logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
         genomic_path = extract_genomic(
@@ -160,8 +160,7 @@ class ShearSplinkPipeline(Pipeline):
 
         # Align reads to genome.
         logger.info('Aligning to reference')
-        logger.info('  %-18s: %s', 'Reference',
-                    _shorten_path(self._index_path))
+        logger.info('  %-18s: %s', 'Reference', shorten_path(self._index_path))
         logger.info('  %-18s: %s', 'Bowtie options',
                     flatten_arguments(self._bowtie_options))
 
@@ -249,7 +248,7 @@ class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
         # Map reads to specific barcodes/samples.
         logger.info('Extracting barcode/sample mapping')
         logger.info('  %-18s: %s', 'Barcodes',
-                    _shorten_path(self._barcode_path))
+                    shorten_path(self._barcode_path))
         read_map = self._get_barcode_mapping(reads_path)
 
         # Extract insertions from bam file.
@@ -286,17 +285,6 @@ class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
 
 register_pipeline(
     name='shearsplink-multiplexed', pipeline=MultiplexedShearSplinkPipeline)
-
-
-def _shorten_path(file_name, limit=40):
-    """Shorten path for str to limit for logging."""
-
-    name = os.path.split(str(file_name))[1]
-
-    if len(name) > limit:
-        return "%s~%s" % (name[:3], name[-(limit - 3):])
-    else:
-        return name
 
 
 def _extract_barcode_mapping(reads, barcodes, barcode_mapping=None):
