@@ -1,35 +1,104 @@
 from collections import defaultdict
 import itertools
-import logging
 import operator
 
 import numpy as np
-import pysam
 import toolz
 
 from pyim.model import Insertion
 from pyim.util.frozendict import frozendict
 
 
-def fetch_alignments(bam_path, only_primary=True, min_mapq=None):
-    bam_file = pysam.AlignmentFile(str(bam_path))
+def extract_insertions(alignments,
+                       func,
+                       paired=False,
+                       group_func=None,
+                       merge_dist=None,
+                       min_mapq=None,
+                       min_support=1,
+                       logger=None):
+    """Extracts insertions from given alignments."""
 
-    try:
-        alignments = iter(bam_file)
+    if logger is not None:
+        logger.info('Summarizing alignments')
+        logger.info('  %-18s: %s', 'Minimum mapq', min_mapq)
 
-        if only_primary:
-            alignments = (aln for aln in alignments if not aln.is_secondary)
+    alignments = filter_alignments(alignments, min_mapq=min_mapq)
 
-        if min_mapq is not None:
-            alignments = (aln for aln in alignments
-                          if aln.mapping_quality >= min_mapq)
+    if group_func is None:
+        summ_func = summarize_mates if paired else summarize_alignments
+        summary = summ_func(alignments, func=func)
 
-        yield from alignments
-    finally:
-        bam_file.close()
+        if logger is not None:
+            _log_insertions(logger, min_support, merge_dist)
+
+        insertions = convert_summary_to_insertions(
+            summary, merge_dist=merge_dist, min_support=min_support)
+    else:
+        if paired:
+            raise NotImplementedError(
+                'Grouping is not yet supported for paired-end data')
+        else:
+            aln_summaries = summarize_alignments_by_group(
+                alignments, func, group_func=group_func)
+
+            if logger is not None:
+                _log_insertions(logger, min_support, merge_dist)
+
+            insertion_grps = (
+                convert_summary_to_insertions(
+                    aln_summ,
+                    min_support=min_support,
+                    merge_dist=merge_dist,
+                    sample=barcode,
+                    id_fmt=barcode + '.INS_{}')
+                for barcode, aln_summ in aln_summaries.items()) # yapf: disable
+
+        insertions = list(itertools.chain.from_iterable(insertion_grps))
+
+    return insertions
 
 
-def summarize_alignments(alignments):
+def _log_insertions(logger, min_support, merge_dist):
+    logger.info('Converting to insertions')
+    logger.info('  %-18s: %d', 'Minimum support', min_support)
+    logger.info('  %-18s: %s', 'Merge distance', merge_dist)
+
+
+def filter_alignments(alignments, only_primary=True, min_mapq=None):
+    """Filters alignments on mapping quality, etc."""
+
+    if only_primary:
+        alignments = (aln for aln in alignments if not aln.is_secondary)
+
+    if min_mapq is not None:
+        alignments = (aln for aln in alignments
+                      if aln.mapping_quality >= min_mapq)
+
+    yield from alignments
+
+
+def iter_mates(alignments):
+    """Iterates over mate pairs in alignments."""
+
+    cache = {}
+    for aln in alignments:
+        if aln.is_proper_pair:
+            # Try to get mate from cache.
+            mate = cache.pop(aln.query_name, None)
+
+            if mate is None:
+                # If not found, cache this mate.
+                cache[aln.query_name] = aln
+            else:
+                # Otherwise, yield with mate.
+                if aln.is_read1:
+                    yield aln, mate
+                else:
+                    yield mate, aln
+
+
+def summarize_alignments(alignments, func):
     """Summarizes alignments into a dict of chromosomal positions.
 
     This function summarizes an iterable of alignments into a dict that
@@ -45,6 +114,13 @@ def summarize_alignments(alignments):
     alignments : iterable[pysam.AlignedSegment]
         Alignments to summarize. May be prefiltered (on mapping quality
         for example), as this function does not perform any filtering itself.
+    func : Function
+        Function that takes an alignment and returns a Tuple containing
+        (a) the location of the breakpoint with the transposon and (b) the
+        position of the breakpoint with the linker (or the end of the read
+        if no linkeris used). The former should be returned as a tuple of
+        (chromosome, position, strand), whereas the latter should only be
+        a position.
 
     Returns
     -------
@@ -53,77 +129,45 @@ def summarize_alignments(alignments):
         (chromosome, position, strand) tuple to ligation points.
 
     """
+
     alignment_map = defaultdict(list)
 
     for aln in alignments:
-        tup = _process_alignment(aln)
-        if tup is not None:
-            alignment_map[tup[0]].append(tup[1])
+        transposon_position, linker_position = func(aln)
+        alignment_map[transposon_position].append(linker_position)
 
     return dict(alignment_map)
 
 
-def summarize_alignments_by_group(alignments, group_func):
+def summarize_mates(alignments, func):
+    """Summarizes mate pairs into a dict of chromosomal positions."""
+
+    alignment_map = defaultdict(list)
+
+    for mate1, mate2 in iter_mates(alignments):
+        transposon_position, linker_position = func(mate1, mate2)
+        alignment_map[transposon_position].append(linker_position)
+
+    return dict(alignment_map)
+
+
+def summarize_alignments_by_group(alignments, func, group_func):
+    """Summarizes groups of alignments into a dict of chromosomal positions."""
+
     # Take subgroups of alignments into account. This allows us to make
     # arbitrary subgroups of alignment summaries, for example by grouping
     # reads by sample barcodes.
+
     alignment_map = defaultdict(lambda: defaultdict(list))
 
     for aln in alignments:
-        tup = _process_alignment(aln)
-        if tup is not None:
-            grp = group_func(aln)
-            if grp is not None:
-                alignment_map[grp][tup[0]].append(tup[1])
+        transposon_position, linker_position = func(aln)
+        group = group_func(aln)
+
+        if group is not None:
+            alignment_map[group][transposon_position].append(linker_position)
 
     return {k: dict(v) for k, v in alignment_map.items()}
-
-
-def _process_alignment(aln):
-    if aln.reference_id != -1:
-        ref = aln.reference_name
-
-        if aln.is_reverse:
-            transposon_pos = aln.reference_end
-            linker_pos = aln.reference_start
-            strand = -1
-        else:
-            transposon_pos = aln.reference_start
-            linker_pos = aln.reference_end
-            strand = 1
-
-        key = (ref, transposon_pos, strand)
-
-        return key, linker_pos
-    else:
-        return None
-
-
-def extract_barcode_mapping(reads, barcodes, barcode_mapping=None):
-
-    # Create barcode/sample dict.
-    barcode_dict = {bc.name: bc.sequence for bc in barcodes}
-
-    if barcode_mapping is not None:
-        barcode_dict = {sample: barcode_dict[barcode]
-                        for barcode, sample in barcode_mapping.items()}
-
-    # Build mapping.
-    mapping = {}
-
-    for read in reads:
-        # Check each barcode for match in read.
-        matched = [k for k, v in barcode_dict.items() if v in read.sequence]
-
-        if len(matched) == 1:
-            # Record single matches.
-            name = read.name.split()[0]
-            mapping[name] = matched[0]
-        elif len(matched) > 1:
-            logging.warning('Skipping %s due to multiple matching barcodes',
-                            read.name.split()[0])
-
-    return mapping
 
 
 def merge_summary_within_distance(aln_summary, max_distance=10):
@@ -188,15 +232,15 @@ def _merge_entries(alignment_map, keys):
 
 def convert_summary_to_insertions(aln_summary,
                                   min_support=1,
-                                  merge_distance=None,
+                                  merge_dist=None,
                                   id_fmt='INS_{}',
                                   **kwargs):
     """Converts an alignment map to a list of Insertions."""
 
     # Optionally merge insertions within x distance.
-    if merge_distance is not None:
+    if merge_dist is not None:
         aln_summary = merge_summary_within_distance(
-            aln_summary, max_distance=merge_distance)
+            aln_summary, max_distance=merge_dist)
 
     # Convert to insertions.
     insertions = (_to_insertion(ref, pos, strand, ends, id_=None, **kwargs)
@@ -206,12 +250,11 @@ def convert_summary_to_insertions(aln_summary,
     # Filter for support.
     insertions = (ins for ins in insertions if ins.support >= min_support)
 
-    # Sort by depth and add IDs.
-    insertions = sorted(insertions, key=operator.attrgetter('support'))[::-1]
-    insertions = [ins._replace(id=id_fmt.format(i + 1))
-                  for i, ins in enumerate(insertions)]
+    # Add ids.
+    insertions = (ins._replace(id=id_fmt.format(i + 1))
+                  for i, ins in enumerate(insertions))
 
-    return insertions
+    return list(insertions)
 
 
 def _to_insertion(ref, pos, strand, ends, id_=None, **kwargs):

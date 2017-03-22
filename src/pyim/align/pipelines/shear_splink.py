@@ -5,13 +5,14 @@ from pathlib import Path
 
 from cutadapt import seqio
 import pandas as pd
+import pysam
 
 from pyim.external import bowtie2
 from pyim.external.util import flatten_arguments
 from pyim.model import Insertion
 
 from ..common.genomic import extract_genomic
-from ..common import insertions as cm_ins
+from ..common.insertions import extract_insertions
 from .base import Pipeline, register_pipeline
 
 DEFAULT_OVERLAP = 3
@@ -115,23 +116,19 @@ class ShearSplinkPipeline(Pipeline):
         alignment_path = self._extract_and_align(reads_path, output_dir,
                                                  logger)
 
-        # Extract alignment groups (grouped by position) from bam file.
-        logger.info('Summarizing alignments')
-        logger.info('  %-18s: %s', 'Minimum mapq', self._min_mapq)
+        # Extract insertions from bam file.
+        bam_file = pysam.AlignmentFile(str(alignment_path))
 
-        alignments = cm_ins.fetch_alignments(
-            alignment_path, min_mapq=self._min_mapq)
-        aln_summary = cm_ins.summarize_alignments(alignments)
-
-        # Convert groups to insertions and return.
-        logger.info('Converting to insertions')
-        logger.info('  %-18s: %d', 'Minimum support', self._min_support)
-        logger.info('  %-18s: %d', 'Merge distance', self._merge_distance)
-
-        insertions = cm_ins.convert_groups_to_insertions(
-            aln_summary,
-            min_support=self._min_support,
-            merge_distance=self._merge_distance)
+        try:
+            insertions = extract_insertions(
+                iter(bam_file),
+                func=_process_alignment,
+                merge_dist=self._merge_distance,
+                min_mapq=self._min_mapq,
+                min_support=self._min_support,
+                logger=logger)
+        finally:
+            bam_file.close()
 
         # Write insertions to output file.
         insertion_path = output_dir / 'insertions.txt'
@@ -145,10 +142,10 @@ class ShearSplinkPipeline(Pipeline):
         # Extract genomic sequences.
         logger.info('Extracting genomic sequences')
         logger.info('  %-18s: %s', 'Transposon',
-                    shorten_path(self._transposon_path))
-        logger.info('  %-18s: %s', 'Linker', shorten_path(self._linker_path))
+                    _shorten_path(self._transposon_path))
+        logger.info('  %-18s: %s', 'Linker', _shorten_path(self._linker_path))
         logger.info('  %-18s: %s', 'Contaminants',
-                    shorten_path(self._contaminant_path))
+                    _shorten_path(self._contaminant_path))
         logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
         genomic_path = extract_genomic(
@@ -163,7 +160,8 @@ class ShearSplinkPipeline(Pipeline):
 
         # Align reads to genome.
         logger.info('Aligning to reference')
-        logger.info('  %-18s: %s', 'Reference', shorten_path(self._index_path))
+        logger.info('  %-18s: %s', 'Reference',
+                    _shorten_path(self._index_path))
         logger.info('  %-18s: %s', 'Bowtie options',
                     flatten_arguments(self._bowtie_options))
 
@@ -251,37 +249,23 @@ class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
         # Map reads to specific barcodes/samples.
         logger.info('Extracting barcode/sample mapping')
         logger.info('  %-18s: %s', 'Barcodes',
-                    shorten_path(self._barcode_path))
+                    _shorten_path(self._barcode_path))
         read_map = self._get_barcode_mapping(reads_path)
 
-        # Extract alignment groups (grouped by position) from bam file.
-        logger.info('Summarizing alignments')
-        logger.info('  %-18s: %s', 'Minimum mapq', self._min_mapq)
+        # Extract insertions from bam file.
+        bam_file = pysam.AlignmentFile(str(alignment_path))
 
-        alignments = cm_ins.fetch_alignments(
-            alignment_path, min_mapq=self._min_mapq)
-
-        aln_summaries = cm_ins.summarize_alignments_by_group(
-            alignments,
-            group_func=lambda aln: read_map.get(aln.query_name, None))
-
-        # Convert groups from each sample into insertions,
-        # adding sample name and sample prefix to the ID.
-        logger.info('Converting to insertions')
-        logger.info('  %-18s: %d', 'Minimum support', self._min_support)
-        logger.info('  %-18s: %s', 'Merge distance', self._merge_distance)
-
-        insertion_grps = (
-            cm_ins.convert_summary_to_insertions(
-                aln_summ,
+        try:
+            insertions = extract_insertions(
+                iter(bam_file),
+                func=_process_alignment,
+                group_func=lambda aln: read_map.get(aln.query_name, None),
+                merge_dist=self._merge_distance,
+                min_mapq=self._min_mapq,
                 min_support=self._min_support,
-                merge_distance=self._merge_distance,
-                sample=barcode,
-                id_fmt=barcode + '.INS_{}')
-            for barcode, aln_summ in aln_summaries.items()) # yapf: disable
-
-        # Return concatenated list of insertions.
-        insertions = itertools.chain.from_iterable(insertion_grps)
+                logger=logger)
+        finally:
+            bam_file.close()
 
         # Write insertions to output file.
         insertion_path = output_dir / 'insertions.txt'
@@ -296,15 +280,15 @@ class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
 
         # Extract read --> barcode mapping.
         with seqio.open(str(reads_path)) as reads:
-            return cm_ins.extract_barcode_mapping(reads, barcodes,
-                                                  self._barcode_mapping)
+            return _extract_barcode_mapping(reads, barcodes,
+                                            self._barcode_mapping)
 
 
 register_pipeline(
     name='shearsplink-multiplexed', pipeline=MultiplexedShearSplinkPipeline)
 
 
-def shorten_path(file_name, limit=40):
+def _shorten_path(file_name, limit=40):
     """Shorten path for str to limit for logging."""
 
     name = os.path.split(str(file_name))[1]
@@ -313,3 +297,45 @@ def shorten_path(file_name, limit=40):
         return "%s~%s" % (name[:3], name[-(limit - 3):])
     else:
         return name
+
+
+def _extract_barcode_mapping(reads, barcodes, barcode_mapping=None):
+
+    # Create barcode/sample dict.
+    barcode_dict = {bc.name: bc.sequence for bc in barcodes}
+
+    if barcode_mapping is not None:
+        barcode_dict = {sample: barcode_dict[barcode]
+                        for barcode, sample in barcode_mapping.items()}
+
+    # Build mapping.
+    mapping = {}
+
+    for read in reads:
+        # Check each barcode for match in read.
+        matched = [k for k, v in barcode_dict.items() if v in read.sequence]
+
+        if len(matched) == 1:
+            # Record single matches.
+            name = read.name.split()[0]
+            mapping[name] = matched[0]
+        elif len(matched) > 1:
+            logging.warning('Skipping %s due to multiple matching barcodes',
+                            read.name.split()[0])
+
+    return mapping
+
+
+def _process_alignment(aln):
+    ref = aln.reference_name
+
+    if aln.is_reverse:
+        transposon_pos = aln.reference_end
+        linker_pos = aln.reference_start
+        strand = -1
+    else:
+        transposon_pos = aln.reference_start
+        linker_pos = aln.reference_end
+        strand = 1
+
+    return (ref, transposon_pos, strand), linker_pos
