@@ -17,9 +17,9 @@ def main():
 
     # Run pipeline.
     pipeline = args.pipeline.from_args(args)
-    pipeline.run(reads_path=args.reads,
+    pipeline.run(read_path=args.reads,
                  output_dir=args.output_dir,
-                 reads2_path=args.reads2)
+                 read2_path=args.reads2)
 
 
 def parse_args():

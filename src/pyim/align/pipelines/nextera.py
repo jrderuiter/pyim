@@ -2,15 +2,16 @@ import logging
 from pathlib import Path
 
 import pysam
+import toolz
 
 from pyim.external.bowtie2 import bowtie2
 from pyim.external.cutadapt import cutadapt
 from pyim.external.util import flatten_arguments
 from pyim.model import Insertion
-from pyim.util.path import shorten_path
+from pyim.util.path import shorten_path, extract_suffix
 
 from ..common.insertions import extract_insertions
-from .base import Pipeline
+from .base import Pipeline, register_pipeline
 
 
 class NexteraPipeline(Pipeline):
@@ -18,27 +19,73 @@ class NexteraPipeline(Pipeline):
 
     def __init__(self,
                  transposon_path,
-                 read1_adapter_path,
-                 read2_adapter_path,
-                 min_length=20,
-                 logger=None):
-        super().__init__(logger=logger)
+                 bowtie_index_path,
+                 bowtie_options=None,
+                 min_length=15,
+                 min_support=2,
+                 min_mapq=23,
+                 merge_distance=None,
+                 threads=1):
+        super().__init__()
 
-        self._read1_adapter_path = read1_adapter_path
-        self._read2_adapter_path = read2_adapter_path
         self._transposon_path = transposon_path
-        self._min_length = min_length
+        self._index_path = bowtie_index_path
+        self._bowtie_options = bowtie_options or {}
 
+        self._min_length = min_length
+        self._min_support = min_support
+        self._min_mapq = min_mapq
+
+        self._merge_distance = merge_distance
+        self._threads = threads
+
+    @classmethod
+    def configure_args(cls, parser):
+        super().configure_args(parser)
+
+        parser.add_argument('--transposon', type=Path, required=True)
+        parser.add_argument('--bowtie_index', type=Path, required=True)
+
+        parser.add_argument('--min_length', type=int, default=15)
+        parser.add_argument('--min_support', type=int, default=2)
+        parser.add_argument('--min_mapq', type=int, default=23)
+        parser.add_argument('--merge_distance', type=int, default=None)
+
+        parser.add_argument('--local', default=False, action='store_true')
+        parser.add_argument('--threads', default=1, type=int)
+
+    @classmethod
     def _extract_args(cls, args):
-        raise NotImplementedError()
+        bowtie_options = {'--local': args.local, '--threads': args.threads}
+
+        return dict(
+            transposon_path=args.transposon,
+            bowtie_index_path=args.bowtie_index,
+            min_length=args.min_length,
+            min_support=args.min_support,
+            min_mapq=args.min_mapq,
+            merge_distance=args.merge_distance,
+            bowtie_options=bowtie_options,
+            threads=args.threads)
 
     def run(self, read_path, output_dir, read2_path=None):
+        if read2_path is None:
+            raise ValueError('This pipeline requires paired-end data')
+
         logger = logging.getLogger()
 
-        trimmed_path, trimmed2_path = self._trim_adapters(
+        output_dir.mkdir(exist_ok=True, parents=True)
+
+        # Trim reads and align to reference.
+
+        trimmed_tr_path, trimmed_tr2_path = self._trim_transposon(
             read_path, read2_path, output_dir, logger=logger)
+
+        trimmed_nt_path, trimmed_nt2_path = self._trim_nextera(
+            trimmed_tr_path, trimmed_tr2_path, output_dir, logger=logger)
+
         alignment_path = self._align(
-            trimmed_path, trimmed2_path, output_dir, logger=logger)
+            trimmed_nt_path, trimmed_nt2_path, output_dir, logger=logger)
 
         # Extract insertions from bam file.
         bam_file = pysam.AlignmentFile(str(alignment_path))
@@ -61,55 +108,55 @@ class NexteraPipeline(Pipeline):
         ins_frame = Insertion.to_frame(insertions)
         ins_frame.to_csv(str(insertion_path), sep='\t', index=False)
 
-        # genomic_paths = self._extract_genomic(trimmed_paths, work_dir)
-        # alignment_path = self._align(genomic_paths)
-        # yield from self._extract_insertions(alignment_path)
+    def _trim_nextera(self, read_path, read2_path, output_dir, logger):
+        cutadapt_opts = {
+            '-a': 'CTGTCTCTTATA',
+            '-A': 'CTGTCTCTTATA',
+            '--minimum-length': self._min_length,
+        }
 
-        # def _trim_nextera_adapters(self, read_paths, work_dir):
-        #     output_paths = path.build_paths(
-        #         read_paths, dir_=work_dir / '_trim_nextera')
+        suffix = extract_suffix(read_path)
+        trimmed_path = output_dir / ('trimmed_nextera.R1' + suffix)
+        trimmed2_path = output_dir / ('trimmed_nextera.R2' + suffix)
 
-        #     cutadapt_opts = {'--minimum-length': self._min_length,
-        #                      '-g': 'file:' + str(self._read1_adapter_path),
-        #                      '-G': 'file:' + str(self._read2_adapter_path)}
+        cutadapt(
+            read_path=read_path,
+            read2_path=read2_path,
+            out_path=trimmed_path,
+            out2_path=trimmed2_path,
+            options=cutadapt_opts)
 
-        #     cutadapt(
-        #         read_paths[0],
-        #         output_paths[0],
-        #         cutadapt_opts,
-        #         read2_path=read_paths[1],
-        #         out2_path=output_paths[1])
+        return trimmed_path, trimmed2_path
 
-        #     return output_paths
+    def _trim_transposon(self, read_path, read2_path, output_dir, logger):
+        cutadapt_opts = {'-G': 'file:' + str(self._transposon_path),
+                         '--discard-untrimmed': True,
+                         '--pair-filter=both': True}
 
-        # def _extract_genomic(self, read_paths, work_dir):
-        #     output_paths = path.build_paths(
-        #         read_paths, dir_=work_dir / '_trim_sequence')
+        suffix = extract_suffix(read_path)
+        trimmed_path = output_dir / ('trimmed_transposon.R1' + suffix)
+        trimmed2_path = output_dir / ('trimmed_transposon.R2' + suffix)
 
-        #     cutadapt_opts = {'--minimum-length': self._min_length,
-        #                      '--discard-untrimmed': True,
-        #                      '--pair-filter=both': True,
-        #                      '-G': 'file:' + str(self._transposon_path)}
+        cutadapt(
+            read_path=read_path,
+            read2_path=read2_path,
+            out_path=trimmed_path,
+            out2_path=trimmed2_path,
+            options=cutadapt_opts)
 
-        #     cutadapt(
-        #         read_paths[0],
-        #         output_paths[0],
-        #         cutadapt_opts,
-        #         read2_path=read_paths[1],
-        #         out2_path=output_paths[1])
-
-        #     return output_paths
-
-    def _trim_adapters(self, read_path, read2_path, output_dir, logger):
-        raise NotImplementedError()
+        return trimmed_path, trimmed2_path
 
     def _align(self, read_path, read2_path, output_dir, logger):
+
+        options = toolz.merge(self._bowtie_options, {'--fr': True,
+                                                     '--threads':
+                                                     self._threads})
 
         # Align reads to genome.
         logger.info('Aligning to reference')
         logger.info('  %-18s: %s', 'Reference', shorten_path(self._index_path))
         logger.info('  %-18s: %s', 'Bowtie options',
-                    flatten_arguments(self._bowtie_options))
+                    flatten_arguments(options))
 
         alignment_path = output_dir / 'alignment.bam'
 
@@ -118,38 +165,13 @@ class NexteraPipeline(Pipeline):
             read2_paths=[read2_path],
             index_path=self._index_path,
             output_path=alignment_path,
-            options=self._bowtie_options,
+            options=options,
             verbose=True)
 
         return alignment_path
 
 
-def _trim_adapters(read_paths,
-                   output_paths,
-                   adapter1_path=None,
-                   adapter2_path=None,
-                   discard=False,
-                   min_length=None):
-    cutadapt_opts = {}
-
-    if adapter1_path is not None:
-        cutadapt_opts['-g'] = 'file:' + str(adapter1_path)
-
-    if adapter2_path is not None:
-        cutadapt_opts['-G'] = 'file:' + str(adapter2_path)
-
-    if discard:
-        cutadapt_opts['--discard-trimmed'] = True
-
-    if min_length is not None:
-        cutadapt_opts['--minimum-length'] = min_length
-
-    cutadapt(
-        read_paths[0],
-        output_paths[0],
-        cutadapt_opts,
-        in2_path=read_paths[1],
-        out2_path=output_paths[1])
+register_pipeline(name='nextera', pipeline=NexteraPipeline)
 
 
 def _process_mates(mate1, mate2):

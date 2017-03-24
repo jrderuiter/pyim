@@ -29,3 +29,12 @@ def shorten_path(file_name, limit=40):
         return "%s~%s" % (name[:3], name[-(limit - 3):])
     else:
         return name
+
+
+def extract_suffix(file_path):
+    """Extracts suffix from file path."""
+    if file_path.suffixes[-1] == '.gz':
+        suffix = ''.join(file_path.suffixes[-2:])
+    else:
+        suffix = file_path.suffixes[-1]
+    return suffix

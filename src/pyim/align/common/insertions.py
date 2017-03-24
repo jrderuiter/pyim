@@ -234,6 +234,7 @@ def convert_summary_to_insertions(aln_summary,
                                   min_support=1,
                                   merge_dist=None,
                                   id_fmt='INS_{}',
+                                  sort=True,
                                   **kwargs):
     """Converts an alignment map to a list of Insertions."""
 
@@ -249,6 +250,9 @@ def convert_summary_to_insertions(aln_summary,
 
     # Filter for support.
     insertions = (ins for ins in insertions if ins.support >= min_support)
+
+    if sort:
+        insertions = sorted(insertions, key=lambda ins: -ins.support)
 
     # Add ids.
     insertions = (ins._replace(id=id_fmt.format(i + 1))

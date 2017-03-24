@@ -30,7 +30,7 @@ class ShearSplinkPipeline(Pipeline):
                  min_length=15,
                  min_support=2,
                  min_mapq=23,
-                 merge_distance=0,
+                 merge_distance=None,
                  bowtie_options=None,
                  min_overlaps=None,
                  error_rates=None):

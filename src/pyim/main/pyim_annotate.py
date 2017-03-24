@@ -1,5 +1,7 @@
 import argparse
 
+from natsort import order_by_index, index_natsorted
+
 from pyim.annotate import get_annotators
 from pyim.model import Insertion
 
@@ -14,7 +16,10 @@ def main():
     annotated = list(annotator.annotate(insertions))
 
     annotated_frame = Insertion.to_frame(annotated)
-    annotated_frame = annotated_frame.sort_values(by='id')
+
+    annotated_frame = annotated_frame.reindex(index=order_by_index(
+        annotated_frame.index, index_natsorted(annotated_frame.id)))
+
     annotated_frame.to_csv(str(args.output), sep='\t', index=False)
 
 

@@ -11,7 +11,7 @@ with open('HISTORY.rst') as history_file:
 
 requirements = ['pyfaidx>=0.4.8.1', 'intervaltree>=2.1', 'tqdm>=4.7',
                 'toolz>=0.8', 'rpy2>=2.8.2', 'numpy', 'pandas>=0.18',
-                'pysam>=0.9']
+                'pysam>=0.9', 'natsort']
 
 test_requirements = ['pytest', 'pytest-cov', 'pytest-mock',
                      'pytest-helpers-namespace', 'python-coveralls']
