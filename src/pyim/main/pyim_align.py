@@ -2,7 +2,6 @@ import argparse
 import logging
 
 from pyim.align.pipelines import get_pipelines
-from pyim.model import Insertion
 
 logging.basicConfig(
     format='[%(asctime)-15s]  %(message)s',
