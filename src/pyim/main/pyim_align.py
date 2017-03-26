@@ -15,10 +15,12 @@ def main():
     args = parse_args()
 
     # Run pipeline.
+    reads2 = args.reads2 if hasattr(args, 'reads2') else None
+
     pipeline = args.pipeline.from_args(args)
     pipeline.run(read_path=args.reads,
                  output_dir=args.output_dir,
-                 read2_path=args.reads2)
+                 read2_path=reads2)
 
 
 def parse_args():

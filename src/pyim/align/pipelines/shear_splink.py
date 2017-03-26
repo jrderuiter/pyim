@@ -1,4 +1,5 @@
-import itertools
+"""Module containing the ShearSplink pipelines."""
+
 import logging
 from pathlib import Path
 
@@ -6,14 +7,14 @@ from cutadapt import seqio
 import pandas as pd
 import pysam
 
-from pyim.external import bowtie2
+from pyim.external.cutadapt import cutadapt, cutadapt_summary
+from pyim.external.bowtie2 import bowtie2
 from pyim.external.util import flatten_arguments
 from pyim.model import Insertion
-from pyim.util.path import shorten_path
+from pyim.util.path import shorten_path, extract_suffix
 
-from ..common.genomic import extract_genomic
-from ..common.insertions import extract_insertions
 from .base import Pipeline, register_pipeline
+from ..util import extract_insertions
 
 DEFAULT_OVERLAP = 3
 DEFAULT_ERROR_RATE = 0.1
@@ -54,7 +55,7 @@ class ShearSplinkPipeline(Pipeline):
 
     @classmethod
     def configure_args(cls, parser):
-        super().configure_args(parser)
+        cls._setup_base_args(parser, paired=False)
 
         parser.add_argument('--transposon', type=Path, required=True)
         parser.add_argument('--bowtie_index', type=Path, required=True)
@@ -106,15 +107,18 @@ class ShearSplinkPipeline(Pipeline):
             min_overlaps=min_overlaps,
             error_rates=error_rates)
 
-    def run(self, reads_path, output_dir, reads2_path=None):
-        if reads2_path is not None:
+    def run(self, read_path, output_dir, read2_path=None):
+        if read2_path is not None:
             raise ValueError('Pipeline does not support paired-end data')
 
         logger = logging.getLogger()
 
+        # Ensure output dir exists.
+        output_dir.mkdir(exist_ok=True, parents=True)
+
         # Extract genomic sequences and align to reference.
-        alignment_path = self._extract_and_align(reads_path, output_dir,
-                                                 logger)
+        genomic_path = self._extract_genomic(read_path, output_dir, logger)
+        alignment_path = self._align(genomic_path, output_dir, logger)
 
         # Extract insertions from bam file.
         bam_file = pysam.AlignmentFile(str(alignment_path))
@@ -136,40 +140,108 @@ class ShearSplinkPipeline(Pipeline):
         ins_frame = Insertion.to_frame(insertions)
         ins_frame.to_csv(str(insertion_path), sep='\t', index=False)
 
-    def _extract_and_align(self, reads_path, output_dir, logger):
-        output_dir.mkdir(exist_ok=True, parents=True)
+    def _extract_genomic(self, read_path, output_dir, logger):
+        # Log parameters
+        if logger is not None:
+            logger.info('Extracting genomic sequences')
+            logger.info('  %-18s: %s', 'Transposon',
+                        shorten_path(self._transposon_path))
+            logger.info('  %-18s: %s', 'Linker',
+                        shorten_path(self._linker_path))
+            logger.info('  %-18s: %s', 'Contaminants',
+                        shorten_path(self._contaminant_path))
+            logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
-        # Extract genomic sequences.
-        logger.info('Extracting genomic sequences')
-        logger.info('  %-18s: %s', 'Transposon',
-                    shorten_path(self._transposon_path))
-        logger.info('  %-18s: %s', 'Linker', shorten_path(self._linker_path))
-        logger.info('  %-18s: %s', 'Contaminants',
-                    shorten_path(self._contaminant_path))
-        logger.info('  %-18s: %s', 'Minimum length', self._min_length)
+        # Get suffix to use for intermediate/genomic files.
+        suffix = extract_suffix(read_path)
 
-        genomic_path = extract_genomic(
-            reads_path,
-            output_dir,
-            transposon_path=self._transposon_path,
-            linker_path=self._linker_path,
-            contaminant_path=self._contaminant_path,
-            min_length=self._min_length,
-            min_overlaps=self._min_overlaps,
-            error_rates=self._error_rates)
+        # Track interim files for cleaning.
+        interim_files = []
 
-        # Align reads to genome.
-        logger.info('Aligning to reference')
-        logger.info('  %-18s: %s', 'Reference', shorten_path(self._index_path))
-        logger.info('  %-18s: %s', 'Bowtie options',
-                    flatten_arguments(self._bowtie_options))
+        if self._contaminant_path is not None:
+            # Remove contaminants.
+            contaminant_out_path = output_dir / (
+                'trimmed_contaminant' + suffix)
+
+            contaminant_opts = {
+                '-g': 'file:' + str(self._contaminant_path),
+                '--discard-trimmed': True,
+                '-O': self._min_overlaps.get('contaminant', DEFAULT_OVERLAP),
+                '-e': self._error_rates.get('contaminant', DEFAULT_ERROR_RATE)
+            }
+
+            process = cutadapt(read_path, contaminant_out_path,
+                               contaminant_opts)
+
+            if logger is not None:
+                summary = cutadapt_summary(process.stdout, padding='   ')
+                logger.info('Trimmed contaminant sequences' + summary)
+
+            interim_files.append(contaminant_out_path)
+        else:
+            contaminant_out_path = read_path
+
+        if self._linker_path is not None:
+            # Remove linker.
+            linker_out_path = output_dir / ('trimmed_linker' + suffix)
+            linker_opts = {
+                '-a': 'file:' + str(self._linker_path),
+                '--discard-untrimmed': True,
+                '-O': self._min_overlaps.get('linker', DEFAULT_OVERLAP),
+                '-e': self._error_rates.get('linker', DEFAULT_ERROR_RATE)
+            }
+
+            process = cutadapt(contaminant_out_path, linker_out_path,
+                               linker_opts)
+
+            if logger is not None:
+                summary = cutadapt_summary(process.stdout, padding='   ')
+                logger.info('Trimmed linker sequence' + summary)
+
+            interim_files.append(linker_out_path)
+        else:
+            linker_out_path = contaminant_out_path
+
+        # Trim transposon and check minimum length.
+        transposon_opts = {
+            '-g': 'file:' + str(self._transposon_path),
+            '--discard-untrimmed': True,
+            '-O': self._min_overlaps.get('transposon', DEFAULT_OVERLAP),
+            '-e': self._error_rates.get('transposon', DEFAULT_ERROR_RATE)
+        }
+
+        if self._min_length is not None:
+            transposon_opts['--minimum-length'] = self._min_length
+
+        genomic_path = output_dir / ('genomic' + suffix)
+        process = cutadapt(linker_out_path, genomic_path, transposon_opts)
+
+        if logger is not None:
+            summary = cutadapt_summary(process.stdout, padding='   ')
+            logger.info('Trimmed transposon sequence and filtered '
+                        'for length' + summary)
+
+        # Clean-up interim files.
+        for file_path in interim_files:
+            file_path.unlink()
+
+        return genomic_path
+
+    def _align(self, read_path, output_dir, logger):
+        # Log parameters
+        if logger is not None:
+            logger.info('Aligning to reference')
+            logger.info('  %-18s: %s', 'Reference',
+                        shorten_path(self._index_path))
+            logger.info('  %-18s: %s', 'Bowtie options',
+                        flatten_arguments(self._bowtie_options))
 
         alignment_path = output_dir / 'alignment.bam'
 
-        bowtie2.bowtie2(
-            [genomic_path],
-            self._index_path,
-            alignment_path,
+        bowtie2(
+            [read_path],
+            index_path=self._index_path,
+            output_path=alignment_path,
             options=self._bowtie_options,
             verbose=True)
 
@@ -177,6 +249,21 @@ class ShearSplinkPipeline(Pipeline):
 
 
 register_pipeline(name='shearsplink', pipeline=ShearSplinkPipeline)
+
+
+def _process_alignment(aln):
+    ref = aln.reference_name
+
+    if aln.is_reverse:
+        transposon_pos = aln.reference_end
+        linker_pos = aln.reference_start
+        strand = -1
+    else:
+        transposon_pos = aln.reference_start
+        linker_pos = aln.reference_end
+        strand = 1
+
+    return (ref, transposon_pos, strand), linker_pos
 
 
 class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
@@ -235,21 +322,24 @@ class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
 
         return arg_dict
 
-    def run(self, reads_path, output_dir, reads2_path=None):
-        if reads2_path is not None:
+    def run(self, read_path, output_dir, read2_path=None):
+        if read2_path is not None:
             raise ValueError('Pipeline does not support paired-end data')
 
         logger = logging.getLogger()
 
+        # Ensure output dir exists.
+        output_dir.mkdir(exist_ok=True, parents=True)
+
         # Extract genomic sequences and align to reference.
-        alignment_path = self._extract_and_align(reads_path, output_dir,
-                                                 logger)
+        genomic_path = self._extract_genomic(read_path, output_dir, logger)
+        alignment_path = self._align(genomic_path, output_dir, logger)
 
         # Map reads to specific barcodes/samples.
         logger.info('Extracting barcode/sample mapping')
         logger.info('  %-18s: %s', 'Barcodes',
                     shorten_path(self._barcode_path))
-        read_map = self._get_barcode_mapping(reads_path)
+        read_map = self._get_barcode_mapping(read_path)
 
         # Extract insertions from bam file.
         bam_file = pysam.AlignmentFile(str(alignment_path))
@@ -272,13 +362,13 @@ class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
         ins_frame = Insertion.to_frame(insertions)
         ins_frame.to_csv(str(insertion_path), sep='\t', index=False)
 
-    def _get_barcode_mapping(self, reads_path):
+    def _get_barcode_mapping(self, read_path):
         # Read barcode sequences.
         with seqio.open(str(self._barcode_path)) as barcode_file:
             barcodes = list(barcode_file)
 
         # Extract read --> barcode mapping.
-        with seqio.open(str(reads_path)) as reads:
+        with seqio.open(str(read_path)) as reads:
             return _extract_barcode_mapping(reads, barcodes,
                                             self._barcode_mapping)
 
@@ -312,18 +402,3 @@ def _extract_barcode_mapping(reads, barcodes, barcode_mapping=None):
                             read.name.split()[0])
 
     return mapping
-
-
-def _process_alignment(aln):
-    ref = aln.reference_name
-
-    if aln.is_reverse:
-        transposon_pos = aln.reference_end
-        linker_pos = aln.reference_start
-        strand = -1
-    else:
-        transposon_pos = aln.reference_start
-        linker_pos = aln.reference_end
-        strand = 1
-
-    return (ref, transposon_pos, strand), linker_pos

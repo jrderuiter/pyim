@@ -1,3 +1,5 @@
+"""Module containing the nextera pipeline."""
+
 import logging
 from pathlib import Path
 
@@ -5,13 +7,13 @@ import pysam
 import toolz
 
 from pyim.external.bowtie2 import bowtie2
-from pyim.external.cutadapt import cutadapt
+from pyim.external.cutadapt import cutadapt, cutadapt_summary
 from pyim.external.util import flatten_arguments
 from pyim.model import Insertion
 from pyim.util.path import shorten_path, extract_suffix
 
-from ..common.insertions import extract_insertions
 from .base import Pipeline, register_pipeline
+from ..util import extract_insertions
 
 
 class NexteraPipeline(Pipeline):
@@ -41,7 +43,7 @@ class NexteraPipeline(Pipeline):
 
     @classmethod
     def configure_args(cls, parser):
-        super().configure_args(parser)
+        cls._setup_base_args(parser, paired=True)
 
         parser.add_argument('--transposon', type=Path, required=True)
         parser.add_argument('--bowtie_index', type=Path, required=True)
@@ -76,16 +78,18 @@ class NexteraPipeline(Pipeline):
 
         output_dir.mkdir(exist_ok=True, parents=True)
 
+        # Extract genomic sequences.
+        if logger is not None:
+            logger.info('Extracting genomic sequences')
+            logger.info('  %-18s: %s', 'Transposon',
+                        shorten_path(self._transposon_path))
+            logger.info('  %-18s: %s', 'Minimum length', self._min_length)
+
         # Trim reads and align to reference.
-
-        trimmed_tr_path, trimmed_tr2_path = self._trim_transposon(
+        genomic_path, genomic2_path = self._extract_genomic(
             read_path, read2_path, output_dir, logger=logger)
-
-        trimmed_nt_path, trimmed_nt2_path = self._trim_nextera(
-            trimmed_tr_path, trimmed_tr2_path, output_dir, logger=logger)
-
         alignment_path = self._align(
-            trimmed_nt_path, trimmed_nt2_path, output_dir, logger=logger)
+            genomic_path, genomic2_path, output_dir, logger=logger)
 
         # Extract insertions from bam file.
         bam_file = pysam.AlignmentFile(str(alignment_path))
@@ -108,7 +112,53 @@ class NexteraPipeline(Pipeline):
         ins_frame = Insertion.to_frame(insertions)
         ins_frame.to_csv(str(insertion_path), sep='\t', index=False)
 
+    def _extract_genomic(self, read_path, read2_path, output_dir, logger):
+        """Extracts genomic sequences from reads.
+
+        Extracts genomic sequences by first trimming for mates for the
+        transposon sequence (dropping reads without a match) and then
+        trimming any Nextera transposase sequences from the remaining reads.
+        Filtering for minimum length is performed in the nextera trimming step.
+        """
+
+        trimmed_tr_path, trimmed_tr2_path = self._trim_transposon(
+            read_path, read2_path, output_dir, logger=logger)
+
+        trimmed_nt_path, trimmed_nt2_path = self._trim_nextera(
+            trimmed_tr_path, trimmed_tr2_path, output_dir, logger=logger)
+
+        trimmed_tr_path.unlink()
+        trimmed_tr2_path.unlink()
+
+        return trimmed_nt_path, trimmed_nt2_path
+
+    def _trim_transposon(self, read_path, read2_path, output_dir, logger):
+        """Selects and trims mates with transposon sequence in second read."""
+
+        cutadapt_opts = {'-G': 'file:' + str(self._transposon_path),
+                         '--discard-untrimmed': True,
+                         '--pair-filter=both': True}
+
+        suffix = extract_suffix(read_path)
+        trimmed_path = output_dir / ('genomic.R1' + suffix)
+        trimmed2_path = output_dir / ('genomic.R2' + suffix)
+
+        process = cutadapt(
+            read_path=read_path,
+            read2_path=read2_path,
+            out_path=trimmed_path,
+            out2_path=trimmed2_path,
+            options=cutadapt_opts)
+
+        if logger is not None:
+            summary = cutadapt_summary(process.stdout, padding='   ')
+            logger.info('Trimmed transposon sequence' + summary)
+
+        return trimmed_path, trimmed2_path
+
     def _trim_nextera(self, read_path, read2_path, output_dir, logger):
+        """Trims nextera sequences from mates and filters for min length."""
+
         cutadapt_opts = {
             '-a': 'CTGTCTCTTATA',
             '-A': 'CTGTCTCTTATA',
@@ -119,38 +169,25 @@ class NexteraPipeline(Pipeline):
         trimmed_path = output_dir / ('trimmed_nextera.R1' + suffix)
         trimmed2_path = output_dir / ('trimmed_nextera.R2' + suffix)
 
-        cutadapt(
+        process = cutadapt(
             read_path=read_path,
             read2_path=read2_path,
             out_path=trimmed_path,
             out2_path=trimmed2_path,
             options=cutadapt_opts)
 
-        return trimmed_path, trimmed2_path
-
-    def _trim_transposon(self, read_path, read2_path, output_dir, logger):
-        cutadapt_opts = {'-G': 'file:' + str(self._transposon_path),
-                         '--discard-untrimmed': True,
-                         '--pair-filter=both': True}
-
-        suffix = extract_suffix(read_path)
-        trimmed_path = output_dir / ('trimmed_transposon.R1' + suffix)
-        trimmed2_path = output_dir / ('trimmed_transposon.R2' + suffix)
-
-        cutadapt(
-            read_path=read_path,
-            read2_path=read2_path,
-            out_path=trimmed_path,
-            out2_path=trimmed2_path,
-            options=cutadapt_opts)
+        if logger is not None:
+            summary = cutadapt_summary(process.stdout, padding='    ')
+            logger.info('Trimmed nextera sequences and '
+                        'filtered for length' + summary)
 
         return trimmed_path, trimmed2_path
 
     def _align(self, read_path, read2_path, output_dir, logger):
+        """Aligns mates to reference using bowtie2."""
 
-        options = toolz.merge(self._bowtie_options, {'--fr': True,
-                                                     '--threads':
-                                                     self._threads})
+        extra_opts = {'--threads': self._threads}
+        options = toolz.merge(self._bowtie_options, extra_opts)
 
         # Align reads to genome.
         logger.info('Aligning to reference')

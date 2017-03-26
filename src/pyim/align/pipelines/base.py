@@ -21,8 +21,14 @@ class Pipeline(abc.ABC):
     @abc.abstractclassmethod
     def configure_args(cls, parser):
         """Configures argument parser for the pipeline."""
+
+    @classmethod
+    def _setup_base_args(cls, parser, paired=False):
         parser.add_argument('--reads', type=Path, required=True)
-        parser.add_argument('--reads2', type=Path, required=False)
+
+        if paired:
+            parser.add_argument('--reads2', type=Path, required=False)
+
         parser.add_argument('--output_dir', type=Path, required=True)
 
     @classmethod
