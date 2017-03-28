@@ -16,6 +16,8 @@
 import sys
 import os
 
+import sphinx_rtd_theme
+
 # If extensions (or modules to document with autodoc) are in another
 # directory, add these directories to sys.path here. If the directory is
 # relative to the documentation root, use os.path.abspath to make it
@@ -106,12 +108,13 @@ pygments_style = 'sphinx'
 # documents.
 #keep_warnings = False
 
-
 # -- Options for HTML output -------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+# html_theme = 'default'
+html_theme = "sphinx_rtd_theme"
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a
 # theme further.  For a list of options available for each theme, see the
@@ -190,7 +193,6 @@ html_static_path = ['_static']
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'pyimdoc'
 
-
 # -- Options for LaTeX output ------------------------------------------
 
 latex_elements = {
@@ -208,9 +210,8 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).
 latex_documents = [
-    ('index', 'pyim.tex',
-     u'PyIM Documentation',
-     u'Julian de Ruiter', 'manual'),
+    ('index', 'pyim.tex', u'PyIM Documentation', u'Julian de Ruiter',
+     'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at
@@ -233,20 +234,16 @@ latex_documents = [
 # If false, no module index is generated.
 #latex_domain_indices = True
 
-
 # -- Options for manual page output ------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'pyim',
-     u'PyIM Documentation',
-     [u'Julian de Ruiter'], 1)
+    ('index', 'pyim', u'PyIM Documentation', [u'Julian de Ruiter'], 1)
 ]
 
 # If true, show URL addresses after external links.
 #man_show_urls = False
-
 
 # -- Options for Texinfo output ----------------------------------------
 
@@ -254,12 +251,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    ('index', 'pyim',
-     u'PyIM Documentation',
-     u'Julian de Ruiter',
-     'pyim',
-     'One line description of project.',
-     'Miscellaneous'),
+    ('index', 'pyim', u'PyIM Documentation', u'Julian de Ruiter', 'pyim',
+     'One line description of project.', 'Miscellaneous'),
 ]
 
 # Documents to append as an appendix to all manuals.

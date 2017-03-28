@@ -11,11 +11,12 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   readme
+   home
    installation
    usage
    contributing
-   authorshistory
+   authors
+   history
 
 Indices and tables
 ==================
