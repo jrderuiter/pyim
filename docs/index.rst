@@ -1,26 +1,29 @@
-.. pyim documentation master file, created by
-   sphinx-quickstart on Tue Jul  9 22:26:36 2013.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+====
+PyIM
+====
 
-Welcome to PyIM's documentation!
-======================================
+.. image:: https://img.shields.io/travis/jrderuiter/pyim.svg
+        :target: https://travis-ci.org/jrderuiter/pyim
 
-Contents:
+PyIM (Python Insertional Mutagenesis) is a python package for analyzing
+insertional mutagenesis data from targeted sequencing of transposon insertion
+sites. The package provides several command line tools for identifying
+insertions, calling common insertion sites (CISs) and annotating
+insertions/CISs directly from the command line. It also aims to provides
+the basic building blocks for implementing new pipelines, CIS callers, etc.
+
+**Disclaimer: the documentation is a work-in-progress and is under
+active development. For details on the different commands/pipelines, see
+the help of the respective commands.**
 
 .. toctree::
    :maxdepth: 2
+   :hidden:
 
-   home
+   self
    installation
    usage
+   api
    contributing
    authors
    history
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

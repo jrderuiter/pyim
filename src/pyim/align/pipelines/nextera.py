@@ -17,7 +17,56 @@ from ..util import extract_insertions
 
 
 class NexteraPipeline(Pipeline):
-    """Nextera-based transposon pipeline."""
+    """Nextera-based transposon pipeline.
+
+    Analyzes paired-end sequence data that was prepared using a Nextera-based
+    protocol. Sequence reads are expected to have the following structure::
+
+        Mate 1:
+            [Genomic]
+
+        Mate 2:
+            [Transposon][Genomic]
+
+    Here, ``transposon`` refers to the flanking part of the transposon sequence
+    and ``genomic`` refers to the genomic DNA located between the transposon
+    sequence and the used adapt sequence. Note that the adapter itself is not
+    sequenced and therefore not part of the reads. However, the end of Mate 1
+    is considered to terminate at the adapter and as such represents the
+    breakpoint between the genomic DNA and the adapter.
+
+    The pipeline essentially performs the following steps:
+
+        - Mates are trimmed to remove the transposon sequence, dropping any
+          reads not containing the transposon.
+        - The remaining mates are trimmed to remove any sequences from
+          the Nextera transposase.
+        - The trimmed mates are aligned to the reference genome.
+        - The resulting alignment is used to identify insertions.
+
+    Parameters
+    ----------
+    transposon_path : Path
+        Path to the (flanking) transposon sequence (fasta).
+    bowtie_index_path : Path
+        Path to the bowtie index.
+    bowtie_options : Dict[str, Any]
+        Dictionary of extra options for Bowtie.
+    min_length : int
+        Minimum length for genomic reads to be kept for alignment.
+    min_support : int
+        Minimum support for insertions to be kept in the final output.
+    min_mapq : int
+        Minimum mapping quality of alignments to be used for
+        identifying insertions.
+    merge_distance : int
+        Maximum distance within which insertions are merged. Used to merge
+        insertions that occur within close vicinity, which is typically due
+        to slight variations in alignments.
+    threads : int
+        The number of threads to use for the alignment.
+
+    """
 
     def __init__(self,
                  transposon_path,

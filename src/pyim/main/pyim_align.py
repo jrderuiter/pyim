@@ -1,3 +1,12 @@
+"""Script for the pyim-align command.
+
+The align command is responsible for extracting genomic reads from the
+sequencing data, aligning these reads to the reference genome and extracting
+insertion sites from these alignments. The command provides access to several
+distinct pipelines, which perform these tasks for different types
+of sequencing data.
+"""
+
 import argparse
 import logging
 
