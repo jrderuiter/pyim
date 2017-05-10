@@ -21,21 +21,6 @@ package, should be loadable in the default R installation.
 Using pip
 ---------
 
-Stable release
-~~~~~~~~~~~~~~
-
-To install PyIM, run this command in your terminal:
-
-.. code-block:: console
-
-    $ pip install pyim
-
-If you don't have `pip`_ installed, this `Python installation guide`_ can guide
-you through the process.
-
-.. _pip: https://pip.pypa.io
-.. _Python installation guide: http://docs.python-guide.org/en/latest/starting/installation/
-
 From sources
 ~~~~~~~~~~~~
 
@@ -46,13 +31,12 @@ You can either clone the public repository:
 .. code-block:: console
 
     $ git clone git://github.com/jrderuiter/pyim
-    $ git checkout master
 
 Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl  -OL https://github.com/jrderuiter/pyim/tarball/master
+    $ curl  -OL https://github.com/jrderuiter/pyim/tarball/develop
 
 Once you have a copy of the source, you can install it with:
 
