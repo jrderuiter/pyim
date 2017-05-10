@@ -21,6 +21,21 @@ package, should be loadable in the default R installation.
 Using pip
 ---------
 
+Stable release
+~~~~~~~~~~~~~~
+
+To install PyIM, run this command in your terminal:
+
+.. code-block:: console
+
+    $ pip install https://github.com/jrderuiter/pyim/archive/0.2.0.tar.gz
+
+If you don't have `pip`_ installed, this `Python installation guide`_ can guide
+you through the process.
+
+.. _pip: https://pip.pypa.io
+.. _Python installation guide: http://docs.python-guide.org/en/latest/starting/installation/
+
 From sources
 ~~~~~~~~~~~~
 
