@@ -25,7 +25,7 @@ def main():
 
     # Read and merge frames.
     if args.sample_names is None:
-        sample_names = [fp.stem for fp in args.insertions]
+        sample_names = [fp.parent.stem for fp in args.insertions]
     else:
         sample_names = args.sample_names
 

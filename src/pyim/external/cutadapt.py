@@ -105,9 +105,10 @@ def _demultiplex(read_path, output_dir, barcode_path, error_rate):
     return output_paths
 
 
-def cutadapt_summary(stdstream):
+def cutadapt_summary(stdstream, padding=''):
     sections = _split_log_sections(stdstream.read().decode())
-    return '\n'.join([' '] + sections['=== Summary ==='])
+    delim = '\n' + padding
+    return padding + delim.join([''] + sections['=== Summary ==='])
 
 
 def _split_log_sections(log_str):

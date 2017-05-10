@@ -5,10 +5,6 @@ PyIM
 .. image:: https://img.shields.io/travis/jrderuiter/pyim.svg
         :target: https://travis-ci.org/jrderuiter/pyim
 
-.. image:: https://readthedocs.org/projects/pyim/badge/?version=latest
-        :target: https://pyim.readthedocs.io/en/latest/?badge=latest
-        :alt: Documentation Status
-
 PyIM (Python Insertional Mutagenesis) is a python package for analyzing
 insertional mutagenesis data from targeted sequencing of transposon insertion
 sites. The package provides several command line tools for identifying
@@ -19,7 +15,9 @@ the basic building blocks for implementing new pipelines, CIS callers, etc.
 Documentation
 -------------
 
-PyIM's documentation will be made available online soon.
+PyIM's documentation is available at
+`jrderuiter.github.io/pyim <http://jrderuiter.github.io/pyim/>`_.
+
 
 Requirements
 ------------

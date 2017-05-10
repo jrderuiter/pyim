@@ -1,8 +1,16 @@
+"""Script for the pyim-align command.
+
+The align command is responsible for extracting genomic reads from the
+sequencing data, aligning these reads to the reference genome and extracting
+insertion sites from these alignments. The command provides access to several
+distinct pipelines, which perform these tasks for different types
+of sequencing data.
+"""
+
 import argparse
 import logging
 
 from pyim.align.pipelines import get_pipelines
-from pyim.model import Insertion
 
 logging.basicConfig(
     format='[%(asctime)-15s]  %(message)s',
@@ -16,10 +24,12 @@ def main():
     args = parse_args()
 
     # Run pipeline.
+    reads2 = args.reads2 if hasattr(args, 'reads2') else None
+
     pipeline = args.pipeline.from_args(args)
-    pipeline.run(reads_path=args.reads,
+    pipeline.run(read_path=args.reads,
                  output_dir=args.output_dir,
-                 reads2_path=args.reads2)
+                 read2_path=reads2)
 
 
 def parse_args():

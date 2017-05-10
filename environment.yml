@@ -4,7 +4,6 @@ channels:
   - r
   - defaults
   - conda-forge
-  - jrderuiter
 dependencies:
   # Basic dependencies
   - python=3.5.*
@@ -29,5 +28,9 @@ dependencies:
   - pytest-mock =1.1
   - python-coveralls =2.9.*
 
+  - sphinx >=1.5
+  - sphinx_rtd_theme
+
   - pip:
     - pytest-helpers-namespace
+    - sphinx-autobuild
