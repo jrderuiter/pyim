@@ -17,7 +17,8 @@ REQUIREMENTS = [
 EXTRAS_REQUIRE = {
     'dev': [
         'pytest', 'pytest-cov', 'pytest-mock', 'pytest-helpers-namespace',
-        'python-coveralls', 'sphinx', 'sphinx-autobuild', 'sphinx_rtd_theme'
+        'python-coveralls', 'sphinx', 'sphinx-autobuild', 'sphinx_rtd_theme',
+        'bumpversion'
     ]
 }
 
@@ -42,7 +43,6 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
     ],
