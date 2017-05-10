@@ -1,0 +1,428 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>API &mdash; PyIM 0.2.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="PyIM 0.2.0 documentation" href="index.html"/>
+        <link rel="next" title="Contributing" href="contributing.html"/>
+        <link rel="prev" title="Usage" href="usage.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> PyIM
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.2.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">PyIM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#pipelines">Pipelines</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#shearsplink">ShearSplink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#nextera">Nextera</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="authors.html">Credits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history.html">History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PyIM</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>API</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/api.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="api">
+<h1>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="pipelines">
+<span id="api-pipelines"></span><h2>Pipelines<a class="headerlink" href="#pipelines" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="shearsplink">
+<h3>ShearSplink<a class="headerlink" href="#shearsplink" title="Permalink to this headline">¶</a></h3>
+<dl class="class">
+<dt id="pyim.align.pipelines.ShearSplinkPipeline">
+<em class="property">class </em><code class="descclassname">pyim.align.pipelines.</code><code class="descname">ShearSplinkPipeline</code><span class="sig-paren">(</span><em>transposon_path</em>, <em>bowtie_index_path</em>, <em>linker_path=None</em>, <em>contaminant_path=None</em>, <em>min_length=15</em>, <em>min_support=2</em>, <em>min_mapq=23</em>, <em>merge_distance=None</em>, <em>bowtie_options=None</em>, <em>min_overlaps=None</em>, <em>error_rates=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyim/align/pipelines/shear_splink.html#ShearSplinkPipeline"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyim.align.pipelines.ShearSplinkPipeline" title="Permalink to this definition">¶</a></dt>
+<dd><p>ShearSplink pipeline.</p>
+<p>Analyzes (single-end) sequencing data that was prepared using the
+ShearSplink protocol. Sequence reads are expected to have the following
+structure:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">Transposon</span><span class="p">][</span><span class="n">Genomic</span><span class="p">][</span><span class="n">Linker</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Here, <code class="docutils literal"><span class="pre">transposon</span></code> refers to the flanking part of the transposon
+sequence, <code class="docutils literal"><span class="pre">linker</span></code> to the flanking linker sequence and <code class="docutils literal"><span class="pre">genomic</span></code>
+to the genomic DNA located in between (which varies per insertion).
+The linker sequence is optional and may be omitted if the linker is not
+included in sequencing.</p>
+<p>The pipeline essentially performs the following steps:</p>
+<blockquote>
+<div><ul class="simple">
+<li>If contaminants are provided, sequence reads are filtered
+(using Cutadapt) for the contaminant sequences.</li>
+<li>The remaining reads are trimmed to remove the transposon and
+linker sequences, leaving only genomic sequences. Reads without
+the transposon/linker sequences are dropped, as we cannot be certain
+of their origin. (Note that the linker is optional and is only
+trimmed if a linker is given).</li>
+<li>The genomic reads are aligned to the reference genome.</li>
+<li>The resulting alignment is used to identify insertions.</li>
+</ul>
+</div></blockquote>
+<p>Note that this pipeline does <strong>NOT</strong> support multiplexed datasets (which is
+the default output of the ShearSplink protocol). For multiplexed datasets,
+use the <code class="docutils literal"><span class="pre">MultiplexedShearSplinkPipeline</span></code>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>transposon_path</strong> (<em>Path</em>) &#8211; Path to the (flanking) transposon sequence (fasta).</li>
+<li><strong>bowtie_index_path</strong> (<em>Path</em>) &#8211; Path to the bowtie index.</li>
+<li><strong>linker_path</strong> (<em>Path</em>) &#8211; Path to the linker sequence (fasta).</li>
+<li><strong>contaminant_path</strong> (<em>Path</em>) &#8211; Path to file containing contaminant sequences (fasta). If provided,
+sequences are filtered for these sequences before extracting genomic
+sequences for alignment.</li>
+<li><strong>min_length</strong> (<em>int</em>) &#8211; Minimum length for genomic reads to be kept for alignment.</li>
+<li><strong>min_support</strong> (<em>int</em>) &#8211; Minimum support for insertions to be kept in the final output.</li>
+<li><strong>min_mapq</strong> (<em>int</em>) &#8211; Minimum mapping quality of alignments to be used for
+identifying insertions.</li>
+<li><strong>merge_distance</strong> (<em>int</em>) &#8211; Maximum distance within which insertions are merged. Used to merge
+insertions that occur within close vicinity, which is typically due
+to slight variations in alignments.</li>
+<li><strong>bowtie_options</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em><em></em>) &#8211; Dictionary of extra options for Bowtie.</li>
+<li><strong>min_overlaps</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em><em></em>) &#8211; Minimum overlap required to recognize the transposon, linker and
+contaminant sequences (see Cutadapts documentation for more
+information). Keys of the dictionary indicate to which sequence the
+overlap corresponds and should be one of the following: <code class="docutils literal"><span class="pre">linker</span></code>,
+<code class="docutils literal"><span class="pre">transposon</span></code> or <code class="docutils literal"><span class="pre">contaminant</span></code>.</li>
+<li><strong>error_rates</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>float</em><em>]</em><em></em>) &#8211; Maximum error rate to use when recognizing transposon, linker and
+contaminant sequences (see Cutadapts documentation for more
+information). Keys should be the same as for <code class="docutils literal"><span class="pre">min_overlaps</span></code>.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyim.align.pipelines.MultiplexedShearSplinkPipeline">
+<em class="property">class </em><code class="descclassname">pyim.align.pipelines.</code><code class="descname">MultiplexedShearSplinkPipeline</code><span class="sig-paren">(</span><em>transposon_path</em>, <em>bowtie_index_path</em>, <em>barcode_path</em>, <em>barcode_mapping=None</em>, <em>linker_path=None</em>, <em>contaminant_path=None</em>, <em>min_length=15</em>, <em>min_support=2</em>, <em>min_mapq=23</em>, <em>merge_distance=0</em>, <em>bowtie_options=None</em>, <em>min_overlaps=None</em>, <em>error_rates=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyim/align/pipelines/shear_splink.html#MultiplexedShearSplinkPipeline"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyim.align.pipelines.MultiplexedShearSplinkPipeline" title="Permalink to this definition">¶</a></dt>
+<dd><p>ShearSplink pipeline supporting multiplexed reads.</p>
+<p>Analyzes multiplexed (single-end) sequencing data that was prepared using
+the ShearSplink protocol. Sequence reads are expected to have the following
+structure:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">Barcode</span><span class="p">][</span><span class="n">Transposon</span><span class="p">][</span><span class="n">Genomic</span><span class="p">][</span><span class="n">Linker</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Here, the <code class="docutils literal"><span class="pre">transposon</span></code>, <code class="docutils literal"><span class="pre">genomic</span></code> and <code class="docutils literal"><span class="pre">linker</span></code> sequences are the
+same as for the <code class="docutils literal"><span class="pre">ShearSplinkPipeline</span></code>. The <code class="docutils literal"><span class="pre">barcode</span></code> sequence is an
+index that indicates which sample the read originated for.</p>
+<p>Barcode sequences should be provided using the <code class="docutils literal"><span class="pre">barcode_path</span></code> argument.
+The optional <code class="docutils literal"><span class="pre">barcode_mapping</span></code> argument can be used to map barcodes to
+sample names.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>transposon_path</strong> (<em>Path</em>) &#8211; Path to the (flanking) transposon sequence (fasta).</li>
+<li><strong>bowtie_index_path</strong> (<em>Path</em>) &#8211; Path to the bowtie index.</li>
+<li><strong>barcode_path</strong> &#8211; Path to barcode sequences (fasta).</li>
+<li><strong>barcode_mapping</strong> (<em>Path</em>) &#8211; Path to a tsv file specifying a mapping from barcodes to sample names.
+Should contain <code class="docutils literal"><span class="pre">sample</span></code> and <code class="docutils literal"><span class="pre">barcode</span></code> columns.</li>
+<li><strong>linker_path</strong> (<em>Path</em>) &#8211; Path to the linker sequence (fasta).</li>
+<li><strong>contaminant_path</strong> (<em>Path</em>) &#8211; Path to file containing contamintant sequences (fasta). If provided,
+sequences are filtered for these sequences before extracting genomic
+sequences for alignment.</li>
+<li><strong>min_length</strong> (<em>int</em>) &#8211; Minimum length for genomic reads to be kept for alignment.</li>
+<li><strong>min_support</strong> (<em>int</em>) &#8211; Minimum support for insertions to be kept in the final output.</li>
+<li><strong>min_mapq</strong> (<em>int</em>) &#8211; Minimum mapping quality of alignments to be used for
+identifying insertions.</li>
+<li><strong>merge_distance</strong> (<em>int</em>) &#8211; Maximum distance within which insertions are merged. Used to merge
+insertions that occur within close vicinity, which is typically due
+to slight variations in alignments.</li>
+<li><strong>bowtie_options</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em><em></em>) &#8211; Dictionary of extra options for Bowtie.</li>
+<li><strong>min_overlaps</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em><em></em>) &#8211; Minimum overlap required to recognize the transposon, linker and
+contamintant sequences (see Cutadapts documentation for more
+information). Keys of the dictionary indicate to which sequence the
+overlap corresponds and should be one of the following: <code class="docutils literal"><span class="pre">linker</span></code>,
+<code class="docutils literal"><span class="pre">transposon</span></code> or <code class="docutils literal"><span class="pre">contaminant</span></code>.</li>
+<li><strong>error_rates</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>float</em><em>]</em><em></em>) &#8211; Maximum error rate to use when recognizing transposon, linker and
+contamintant sequences (see Cutadapts documentation for more
+information). Keys should be the same as for <code class="docutils literal"><span class="pre">min_overlaps</span></code>.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="nextera">
+<h3>Nextera<a class="headerlink" href="#nextera" title="Permalink to this headline">¶</a></h3>
+<dl class="class">
+<dt id="pyim.align.pipelines.NexteraPipeline">
+<em class="property">class </em><code class="descclassname">pyim.align.pipelines.</code><code class="descname">NexteraPipeline</code><span class="sig-paren">(</span><em>transposon_path</em>, <em>bowtie_index_path</em>, <em>bowtie_options=None</em>, <em>min_length=15</em>, <em>min_support=2</em>, <em>min_mapq=23</em>, <em>merge_distance=None</em>, <em>threads=1</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyim/align/pipelines/nextera.html#NexteraPipeline"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyim.align.pipelines.NexteraPipeline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Nextera-based transposon pipeline.</p>
+<p>Analyzes paired-end sequence data that was prepared using a Nextera-based
+protocol. Sequence reads are expected to have the following structure:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">Mate</span> <span class="mi">1</span><span class="p">:</span>
+    <span class="p">[</span><span class="n">Genomic</span><span class="p">]</span>
+
+<span class="n">Mate</span> <span class="mi">2</span><span class="p">:</span>
+    <span class="p">[</span><span class="n">Transposon</span><span class="p">][</span><span class="n">Genomic</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Here, <code class="docutils literal"><span class="pre">transposon</span></code> refers to the flanking part of the transposon sequence
+and <code class="docutils literal"><span class="pre">genomic</span></code> refers to the genomic DNA located between the transposon
+sequence and the used adapt sequence. Note that the adapter itself is not
+sequenced and therefore not part of the reads. However, the end of Mate 1
+is considered to terminate at the adapter and as such represents the
+breakpoint between the genomic DNA and the adapter.</p>
+<p>The pipeline essentially performs the following steps:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Mates are trimmed to remove the transposon sequence, dropping any
+reads not containing the transposon.</li>
+<li>The remaining mates are trimmed to remove any sequences from
+the Nextera transposase.</li>
+<li>The trimmed mates are aligned to the reference genome.</li>
+<li>The resulting alignment is used to identify insertions.</li>
+</ul>
+</div></blockquote>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>transposon_path</strong> (<em>Path</em>) &#8211; Path to the (flanking) transposon sequence (fasta).</li>
+<li><strong>bowtie_index_path</strong> (<em>Path</em>) &#8211; Path to the bowtie index.</li>
+<li><strong>bowtie_options</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em><em></em>) &#8211; Dictionary of extra options for Bowtie.</li>
+<li><strong>min_length</strong> (<em>int</em>) &#8211; Minimum length for genomic reads to be kept for alignment.</li>
+<li><strong>min_support</strong> (<em>int</em>) &#8211; Minimum support for insertions to be kept in the final output.</li>
+<li><strong>min_mapq</strong> (<em>int</em>) &#8211; Minimum mapping quality of alignments to be used for
+identifying insertions.</li>
+<li><strong>merge_distance</strong> (<em>int</em>) &#8211; Maximum distance within which insertions are merged. Used to merge
+insertions that occur within close vicinity, which is typically due
+to slight variations in alignments.</li>
+<li><strong>threads</strong> (<em>int</em>) &#8211; The number of threads to use for the alignment.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="contributing.html" class="btn btn-neutral float-right" title="Contributing" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="usage.html" class="btn btn-neutral" title="Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Julian de Ruiter.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.2.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

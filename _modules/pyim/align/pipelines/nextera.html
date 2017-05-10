@@ -1,0 +1,503 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyim.align.pipelines.nextera &mdash; PyIM 0.2.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../../search.html"/>
+    <link rel="top" title="PyIM 0.2.0 documentation" href="../../../../index.html"/>
+        <link rel="up" title="Module code" href="../../../index.html"/> 
+
+  
+  <script src="../../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../../index.html" class="icon icon-home"> PyIM
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.2.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">PyIM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../authors.html">Credits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../history.html">History</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">PyIM</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyim.align.pipelines.nextera</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyim.align.pipelines.nextera</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Module containing the nextera pipeline.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="k">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span> <span class="nn">pysam</span>
+<span class="kn">import</span> <span class="nn">toolz</span>
+
+<span class="kn">from</span> <span class="nn">pyim.external.bowtie2</span> <span class="k">import</span> <span class="n">bowtie2</span>
+<span class="kn">from</span> <span class="nn">pyim.external.cutadapt</span> <span class="k">import</span> <span class="n">cutadapt</span><span class="p">,</span> <span class="n">cutadapt_summary</span>
+<span class="kn">from</span> <span class="nn">pyim.external.util</span> <span class="k">import</span> <span class="n">flatten_arguments</span>
+<span class="kn">from</span> <span class="nn">pyim.model</span> <span class="k">import</span> <span class="n">Insertion</span>
+<span class="kn">from</span> <span class="nn">pyim.util.path</span> <span class="k">import</span> <span class="n">shorten_path</span><span class="p">,</span> <span class="n">extract_suffix</span>
+
+<span class="kn">from</span> <span class="nn">.base</span> <span class="k">import</span> <span class="n">Pipeline</span><span class="p">,</span> <span class="n">register_pipeline</span>
+<span class="kn">from</span> <span class="nn">..util</span> <span class="k">import</span> <span class="n">extract_insertions</span>
+
+
+<div class="viewcode-block" id="NexteraPipeline"><a class="viewcode-back" href="../../../../api.html#pyim.align.pipelines.NexteraPipeline">[docs]</a><span class="k">class</span> <span class="nc">NexteraPipeline</span><span class="p">(</span><span class="n">Pipeline</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Nextera-based transposon pipeline.</span>
+
+<span class="sd">    Analyzes paired-end sequence data that was prepared using a Nextera-based</span>
+<span class="sd">    protocol. Sequence reads are expected to have the following structure::</span>
+
+<span class="sd">        Mate 1:</span>
+<span class="sd">            [Genomic]</span>
+
+<span class="sd">        Mate 2:</span>
+<span class="sd">            [Transposon][Genomic]</span>
+
+<span class="sd">    Here, ``transposon`` refers to the flanking part of the transposon sequence</span>
+<span class="sd">    and ``genomic`` refers to the genomic DNA located between the transposon</span>
+<span class="sd">    sequence and the used adapt sequence. Note that the adapter itself is not</span>
+<span class="sd">    sequenced and therefore not part of the reads. However, the end of Mate 1</span>
+<span class="sd">    is considered to terminate at the adapter and as such represents the</span>
+<span class="sd">    breakpoint between the genomic DNA and the adapter.</span>
+
+<span class="sd">    The pipeline essentially performs the following steps:</span>
+
+<span class="sd">        - Mates are trimmed to remove the transposon sequence, dropping any</span>
+<span class="sd">          reads not containing the transposon.</span>
+<span class="sd">        - The remaining mates are trimmed to remove any sequences from</span>
+<span class="sd">          the Nextera transposase.</span>
+<span class="sd">        - The trimmed mates are aligned to the reference genome.</span>
+<span class="sd">        - The resulting alignment is used to identify insertions.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    transposon_path : Path</span>
+<span class="sd">        Path to the (flanking) transposon sequence (fasta).</span>
+<span class="sd">    bowtie_index_path : Path</span>
+<span class="sd">        Path to the bowtie index.</span>
+<span class="sd">    bowtie_options : Dict[str, Any]</span>
+<span class="sd">        Dictionary of extra options for Bowtie.</span>
+<span class="sd">    min_length : int</span>
+<span class="sd">        Minimum length for genomic reads to be kept for alignment.</span>
+<span class="sd">    min_support : int</span>
+<span class="sd">        Minimum support for insertions to be kept in the final output.</span>
+<span class="sd">    min_mapq : int</span>
+<span class="sd">        Minimum mapping quality of alignments to be used for</span>
+<span class="sd">        identifying insertions.</span>
+<span class="sd">    merge_distance : int</span>
+<span class="sd">        Maximum distance within which insertions are merged. Used to merge</span>
+<span class="sd">        insertions that occur within close vicinity, which is typically due</span>
+<span class="sd">        to slight variations in alignments.</span>
+<span class="sd">    threads : int</span>
+<span class="sd">        The number of threads to use for the alignment.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">transposon_path</span><span class="p">,</span>
+                 <span class="n">bowtie_index_path</span><span class="p">,</span>
+                 <span class="n">bowtie_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">min_length</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+                 <span class="n">min_support</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                 <span class="n">min_mapq</span><span class="o">=</span><span class="mi">23</span><span class="p">,</span>
+                 <span class="n">merge_distance</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">threads</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_transposon_path</span> <span class="o">=</span> <span class="n">transposon_path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_index_path</span> <span class="o">=</span> <span class="n">bowtie_index_path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bowtie_options</span> <span class="o">=</span> <span class="n">bowtie_options</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_min_length</span> <span class="o">=</span> <span class="n">min_length</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_min_support</span> <span class="o">=</span> <span class="n">min_support</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_min_mapq</span> <span class="o">=</span> <span class="n">min_mapq</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_merge_distance</span> <span class="o">=</span> <span class="n">merge_distance</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span> <span class="o">=</span> <span class="n">threads</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">configure_args</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parser</span><span class="p">):</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">_setup_base_args</span><span class="p">(</span><span class="n">parser</span><span class="p">,</span> <span class="n">paired</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--transposon&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--bowtie_index&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--min_length&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--min_support&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--min_mapq&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">23</span><span class="p">)</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--merge_distance&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--local&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">)</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--threads&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_extract_args</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+        <span class="n">bowtie_options</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;--local&#39;</span><span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">local</span><span class="p">,</span> <span class="s1">&#39;--threads&#39;</span><span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">threads</span><span class="p">}</span>
+
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">transposon_path</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">transposon</span><span class="p">,</span>
+            <span class="n">bowtie_index_path</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">bowtie_index</span><span class="p">,</span>
+            <span class="n">min_length</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">min_length</span><span class="p">,</span>
+            <span class="n">min_support</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">min_support</span><span class="p">,</span>
+            <span class="n">min_mapq</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">min_mapq</span><span class="p">,</span>
+            <span class="n">merge_distance</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">merge_distance</span><span class="p">,</span>
+            <span class="n">bowtie_options</span><span class="o">=</span><span class="n">bowtie_options</span><span class="p">,</span>
+            <span class="n">threads</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">threads</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">read_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">read2_path</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">read2_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;This pipeline requires paired-end data&#39;</span><span class="p">)</span>
+
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span>
+
+        <span class="n">output_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Extract genomic sequences.</span>
+        <span class="k">if</span> <span class="n">logger</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Extracting genomic sequences&#39;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;  </span><span class="si">%-18s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;Transposon&#39;</span><span class="p">,</span>
+                        <span class="n">shorten_path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_transposon_path</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;  </span><span class="si">%-18s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;Minimum length&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_min_length</span><span class="p">)</span>
+
+        <span class="c1"># Trim reads and align to reference.</span>
+        <span class="n">genomic_path</span><span class="p">,</span> <span class="n">genomic2_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_genomic</span><span class="p">(</span>
+            <span class="n">read_path</span><span class="p">,</span> <span class="n">read2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">)</span>
+        <span class="n">alignment_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align</span><span class="p">(</span>
+            <span class="n">genomic_path</span><span class="p">,</span> <span class="n">genomic2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">)</span>
+
+        <span class="c1"># Extract insertions from bam file.</span>
+        <span class="n">bam_file</span> <span class="o">=</span> <span class="n">pysam</span><span class="o">.</span><span class="n">AlignmentFile</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">alignment_path</span><span class="p">))</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">insertions</span> <span class="o">=</span> <span class="n">extract_insertions</span><span class="p">(</span>
+                <span class="nb">iter</span><span class="p">(</span><span class="n">bam_file</span><span class="p">),</span>
+                <span class="n">func</span><span class="o">=</span><span class="n">_process_mates</span><span class="p">,</span>
+                <span class="n">paired</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">merge_dist</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_merge_distance</span><span class="p">,</span>
+                <span class="n">min_mapq</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_min_mapq</span><span class="p">,</span>
+                <span class="n">min_support</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_min_support</span><span class="p">,</span>
+                <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">bam_file</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="c1"># Write insertions to output file.</span>
+        <span class="n">insertion_path</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="s1">&#39;insertions.txt&#39;</span>
+
+        <span class="n">ins_frame</span> <span class="o">=</span> <span class="n">Insertion</span><span class="o">.</span><span class="n">to_frame</span><span class="p">(</span><span class="n">insertions</span><span class="p">)</span>
+        <span class="n">ins_frame</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">insertion_path</span><span class="p">),</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_extract_genomic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">read_path</span><span class="p">,</span> <span class="n">read2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Extracts genomic sequences from reads.</span>
+
+<span class="sd">        Extracts genomic sequences by first trimming for mates for the</span>
+<span class="sd">        transposon sequence (dropping reads without a match) and then</span>
+<span class="sd">        trimming any Nextera transposase sequences from the remaining reads.</span>
+<span class="sd">        Filtering for minimum length is performed in the nextera trimming step.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">trimmed_tr_path</span><span class="p">,</span> <span class="n">trimmed_tr2_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_trim_transposon</span><span class="p">(</span>
+            <span class="n">read_path</span><span class="p">,</span> <span class="n">read2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">)</span>
+
+        <span class="n">trimmed_nt_path</span><span class="p">,</span> <span class="n">trimmed_nt2_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_trim_nextera</span><span class="p">(</span>
+            <span class="n">trimmed_tr_path</span><span class="p">,</span> <span class="n">trimmed_tr2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">)</span>
+
+        <span class="n">trimmed_tr_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+        <span class="n">trimmed_tr2_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">trimmed_nt_path</span><span class="p">,</span> <span class="n">trimmed_nt2_path</span>
+
+    <span class="k">def</span> <span class="nf">_trim_transposon</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">read_path</span><span class="p">,</span> <span class="n">read2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Selects and trims mates with transposon sequence in second read.&quot;&quot;&quot;</span>
+
+        <span class="n">cutadapt_opts</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;-G&#39;</span><span class="p">:</span> <span class="s1">&#39;file:&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_transposon_path</span><span class="p">),</span>
+                         <span class="s1">&#39;--discard-untrimmed&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                         <span class="s1">&#39;--pair-filter=both&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+
+        <span class="n">suffix</span> <span class="o">=</span> <span class="n">extract_suffix</span><span class="p">(</span><span class="n">read_path</span><span class="p">)</span>
+        <span class="n">trimmed_path</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="p">(</span><span class="s1">&#39;genomic.R1&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+        <span class="n">trimmed2_path</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="p">(</span><span class="s1">&#39;genomic.R2&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+
+        <span class="n">process</span> <span class="o">=</span> <span class="n">cutadapt</span><span class="p">(</span>
+            <span class="n">read_path</span><span class="o">=</span><span class="n">read_path</span><span class="p">,</span>
+            <span class="n">read2_path</span><span class="o">=</span><span class="n">read2_path</span><span class="p">,</span>
+            <span class="n">out_path</span><span class="o">=</span><span class="n">trimmed_path</span><span class="p">,</span>
+            <span class="n">out2_path</span><span class="o">=</span><span class="n">trimmed2_path</span><span class="p">,</span>
+            <span class="n">options</span><span class="o">=</span><span class="n">cutadapt_opts</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">logger</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">summary</span> <span class="o">=</span> <span class="n">cutadapt_summary</span><span class="p">(</span><span class="n">process</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;   &#39;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Trimmed transposon sequence&#39;</span> <span class="o">+</span> <span class="n">summary</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">trimmed_path</span><span class="p">,</span> <span class="n">trimmed2_path</span>
+
+    <span class="k">def</span> <span class="nf">_trim_nextera</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">read_path</span><span class="p">,</span> <span class="n">read2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Trims nextera sequences from mates and filters for min length.&quot;&quot;&quot;</span>
+
+        <span class="n">cutadapt_opts</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;-a&#39;</span><span class="p">:</span> <span class="s1">&#39;CTGTCTCTTATA&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;-A&#39;</span><span class="p">:</span> <span class="s1">&#39;CTGTCTCTTATA&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;--minimum-length&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_min_length</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="n">suffix</span> <span class="o">=</span> <span class="n">extract_suffix</span><span class="p">(</span><span class="n">read_path</span><span class="p">)</span>
+        <span class="n">trimmed_path</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="p">(</span><span class="s1">&#39;trimmed_nextera.R1&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+        <span class="n">trimmed2_path</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="p">(</span><span class="s1">&#39;trimmed_nextera.R2&#39;</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+
+        <span class="n">process</span> <span class="o">=</span> <span class="n">cutadapt</span><span class="p">(</span>
+            <span class="n">read_path</span><span class="o">=</span><span class="n">read_path</span><span class="p">,</span>
+            <span class="n">read2_path</span><span class="o">=</span><span class="n">read2_path</span><span class="p">,</span>
+            <span class="n">out_path</span><span class="o">=</span><span class="n">trimmed_path</span><span class="p">,</span>
+            <span class="n">out2_path</span><span class="o">=</span><span class="n">trimmed2_path</span><span class="p">,</span>
+            <span class="n">options</span><span class="o">=</span><span class="n">cutadapt_opts</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">logger</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">summary</span> <span class="o">=</span> <span class="n">cutadapt_summary</span><span class="p">(</span><span class="n">process</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;    &#39;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Trimmed nextera sequences and &#39;</span>
+                        <span class="s1">&#39;filtered for length&#39;</span> <span class="o">+</span> <span class="n">summary</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">trimmed_path</span><span class="p">,</span> <span class="n">trimmed2_path</span>
+
+    <span class="k">def</span> <span class="nf">_align</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">read_path</span><span class="p">,</span> <span class="n">read2_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Aligns mates to reference using bowtie2.&quot;&quot;&quot;</span>
+
+        <span class="n">extra_opts</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;--threads&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span><span class="p">}</span>
+        <span class="n">options</span> <span class="o">=</span> <span class="n">toolz</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_bowtie_options</span><span class="p">,</span> <span class="n">extra_opts</span><span class="p">)</span>
+
+        <span class="c1"># Align reads to genome.</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Aligning to reference&#39;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;  </span><span class="si">%-18s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;Reference&#39;</span><span class="p">,</span> <span class="n">shorten_path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_index_path</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;  </span><span class="si">%-18s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;Bowtie options&#39;</span><span class="p">,</span>
+                    <span class="n">flatten_arguments</span><span class="p">(</span><span class="n">options</span><span class="p">))</span>
+
+        <span class="n">alignment_path</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="s1">&#39;alignment.bam&#39;</span>
+
+        <span class="n">bowtie2</span><span class="p">(</span>
+            <span class="n">read_paths</span><span class="o">=</span><span class="p">[</span><span class="n">read_path</span><span class="p">],</span>
+            <span class="n">read2_paths</span><span class="o">=</span><span class="p">[</span><span class="n">read2_path</span><span class="p">],</span>
+            <span class="n">index_path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_index_path</span><span class="p">,</span>
+            <span class="n">output_path</span><span class="o">=</span><span class="n">alignment_path</span><span class="p">,</span>
+            <span class="n">options</span><span class="o">=</span><span class="n">options</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">alignment_path</span></div>
+
+
+<span class="n">register_pipeline</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;nextera&#39;</span><span class="p">,</span> <span class="n">pipeline</span><span class="o">=</span><span class="n">NexteraPipeline</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_process_mates</span><span class="p">(</span><span class="n">mate1</span><span class="p">,</span> <span class="n">mate2</span><span class="p">):</span>
+    <span class="n">ref</span> <span class="o">=</span> <span class="n">mate1</span><span class="o">.</span><span class="n">reference_name</span>
+
+    <span class="k">if</span> <span class="n">mate1</span><span class="o">.</span><span class="n">is_reverse</span><span class="p">:</span>
+        <span class="n">transposon_pos</span> <span class="o">=</span> <span class="n">mate2</span><span class="o">.</span><span class="n">reference_start</span>
+        <span class="n">linker_pos</span> <span class="o">=</span> <span class="n">mate1</span><span class="o">.</span><span class="n">reference_end</span>
+        <span class="n">strand</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">transposon_pos</span> <span class="o">=</span> <span class="n">mate2</span><span class="o">.</span><span class="n">reference_end</span>
+        <span class="n">linker_pos</span> <span class="o">=</span> <span class="n">mate1</span><span class="o">.</span><span class="n">reference_start</span>
+        <span class="n">strand</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">ref</span><span class="p">,</span> <span class="n">transposon_pos</span><span class="p">,</span> <span class="n">strand</span><span class="p">),</span> <span class="n">linker_pos</span>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Julian de Ruiter.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../../',
+            VERSION:'0.2.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
