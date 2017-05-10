@@ -24,12 +24,11 @@ install:
     - source activate test
 
     # Install dependencies.
-    - conda install -c r -c bioconda r
-    - pip install .[test]
+    - conda install -c r -c bioconda r r-cimpl
+    - pip install .[dev]
 
-    # Install test dependencies.
-
-script: py.test --cov pyim --cov-report term-missing
+script:
+    py.test tests --cov pyim --cov-report term-missing
 
 #after_success:
 #    - coveralls
