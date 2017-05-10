@@ -1,36 +1,60 @@
-__author__ = 'Julian'
-
-import sys
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 from setuptools import setup, find_packages
 
-install_requires = ['future', 'numpy', 'scipy', 'pandas', 'pysam',
-                    'natsort', 'rpy2', 'scikit-bio', 'tkgeno']
+with open('README.rst') as readme_file:
+    README = readme_file.read()
 
-if sys.version_info[0] == 2:
-    install_requires += ['pathlib', 'enum']
+with open('HISTORY.rst') as history_file:
+    HISTORY = history_file.read()
+
+REQUIREMENTS = [
+    'pyfaidx>=0.4.8.1', 'intervaltree>=2.1', 'tqdm>=4.7', 'toolz>=0.8',
+    'rpy2>=2.8.2', 'numpy', 'pandas>=0.18', 'pysam>=0.9', 'natsort', 'cutadapt'
+]
+
+EXTRAS_REQUIRE = {
+    'dev': [
+        'pytest', 'pytest-cov', 'pytest-mock', 'pytest-helpers-namespace',
+        'python-coveralls', 'sphinx', 'sphinx-autobuild', 'sphinx_rtd_theme',
+        'bumpversion'
+    ]
+}
 
 setup(
     name='pyim',
-    version='0.4.2',
-    url='',
+    version='0.2.0',
+    description=('Tool for identifying transposon insertions '
+                 'from targeted DNA-sequencing data.'),
+    long_description=README + '\n\n' + HISTORY,
     author='Julian de Ruiter',
-    author_email='j.r.deruiter@icloud.com',
-    description='Predicts transposon insertion sites from DNA-seq data.',
-    license='BSD',
-    packages=find_packages(),
+    author_email='julianderuiter@gmail.com',
+    url='https://github.com/jrderuiter/pyim',
+    packages=find_packages('src'),
+    package_dir={'': 'src'},
     include_package_data=True,
-    entry_points={'console_scripts': [
-        'pyim-align = pyim.main.align:main',
-        'pyim-merge = pyim.main.merge:main',
-        'pyim-annotate = pyim.main.annotate:main',
-        'pyim-cis = pyim.main.cis:main',
-        'pyim-plot = pyim.main.plot:main',
-        'pyim-gff = pyim.main.gff:main',
-        'pyim-split = pyim.main.split:main'
-    ]},
-    extras_require={'test': 'pytest'},
-    zip_safe=True,
-    classifiers=[],
-    install_requires=install_requires
-)
+    install_requires=REQUIREMENTS,
+    license='MIT license',
+    zip_safe=False,
+    keywords='pyim',
+    classifiers=[
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: MIT License',
+        'Natural Language :: English',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+    ],
+    extras_require=EXTRAS_REQUIRE,
+    entry_points={
+        'console_scripts': [
+            'pyim-align = pyim.main.pyim_align:main',
+            'pyim-demultiplex = pyim.main.pyim_demultiplex:main',
+            'pyim-merge = pyim.main.pyim_merge:main',
+            'pyim-cis = pyim.main.pyim_cis:main',
+            'pyim-annotate = pyim.main.pyim_annotate:main',
+            'pyim-bed = pyim.main.pyim_bed:main',
+            'pyim-split = pyim.main.pyim_split:main'
+        ]
+    })

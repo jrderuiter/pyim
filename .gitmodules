@@ -1,0 +1,3 @@
+[submodule "external/cimpl"]
+	path = external/cimpl
+	url = https://github.com/jrderuiter/cimpl.git
