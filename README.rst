@@ -32,38 +32,17 @@ dependencies:
 Installation
 ------------
 
-Using conda
-~~~~~~~~~~~
+To install PyIM, run this command in your terminal:
 
-The recommended way to install PyIM is using conda, as with conda you can
-install PyIM together with its external dependencies (cutadapt and bowtie2)
-into an isolated environment using a single command:
+.. code-block:: console
 
-.. code:: bash
+    $ pip install https://github.com/jrderuiter/pyim/archive/0.2.0.tar.gz
 
-    conda create -n pyim -c jrderuiter -c bioconda -c r pyim
+If you don't have `pip`_ installed, this `Python installation guide`_ can guide
+you through the process.
 
-Alternatively, PyIM can be installed in an existing environent using:
-
-.. code:: bash
-
-    conda install -c jrderuiter -c bioconda -c r pyim
-
-Conda packages are available for both OSX and Linux (64-bit).
-
-Using pip
-~~~~~~~~~
-
-PyIM can be installed from Github using pip as follows:
-
-.. code:: bash
-
-    pip install git+git://github.com/jrderuiter/pyim.git#egg=pyim
-
-Note that in this case, external dependencies must be installed manually.
-
-Unfortunately, PyIM is not yet available on PyPI, though this may
-change when the package is further developed.
+.. _pip: https://pip.pypa.io
+.. _Python installation guide: http://docs.python-guide.org/en/latest/starting/installation/
 
 License
 -------
