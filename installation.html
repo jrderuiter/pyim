@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Installation &mdash; PyIM 0.2.0 documentation</title>
+  <title>Installation &mdash; PyIM 0.2.1 documentation</title>
   
 
   
@@ -35,7 +35,7 @@
         <link rel="index" title="Index"
               href="genindex.html"/>
         <link rel="search" title="Search" href="search.html"/>
-    <link rel="top" title="PyIM 0.2.0 documentation" href="index.html"/>
+    <link rel="top" title="PyIM 0.2.1 documentation" href="index.html"/>
         <link rel="next" title="Usage" href="usage.html"/>
         <link rel="prev" title="PyIM" href="index.html"/> 
 
@@ -66,7 +66,7 @@
             
             
               <div class="version">
-                0.2.0
+                0.2.1
               </div>
             
           
@@ -94,12 +94,8 @@
 <li class="toctree-l1"><a class="reference internal" href="index.html">PyIM</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#dependencies">Dependencies</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#using-pip">Using pip</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#stable-release">Stable release</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#from-sources">From sources</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#using-bioconda">Using bioconda</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#using-bioconda-recommended">Using bioconda (recommended)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#using-pip">Using pip</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
@@ -184,37 +180,29 @@
 <p>These external tools should be available in <code class="docutils literal"><span class="pre">$PATH</span></code>. CIMPL, which is an R
 package, should be loadable in the default R installation.</p>
 </div>
+<div class="section" id="using-bioconda-recommended">
+<h2>Using bioconda (recommended)<a class="headerlink" href="#using-bioconda-recommended" title="Permalink to this headline">¶</a></h2>
+<p>The recommended way to install PyIM is using bioconda, as this installs
+PyIM together with its external dependencies into an isolated environment
+using a single command:</p>
+<div class="code bash highlight-shell"><div class="highlight"><pre><span></span>conda create -n pyim pyim
+</pre></div>
+</div>
+<p>This assumes that condas channels have been configured as <a class="reference external" href="https://bioconda.github.io/#set-up-channels">recommended</a>
+by bioconda.</p>
+<p>Alternatively, PyIM can be installed in an existing environment using:</p>
+<div class="code bash highlight-shell"><div class="highlight"><pre><span></span>conda install pyim
+</pre></div>
+</div>
+</div>
 <div class="section" id="using-pip">
 <h2>Using pip<a class="headerlink" href="#using-pip" title="Permalink to this headline">¶</a></h2>
-<div class="section" id="stable-release">
-<h3>Stable release<a class="headerlink" href="#stable-release" title="Permalink to this headline">¶</a></h3>
-<p>To install PyIM, run this command in your terminal:</p>
-<div class="highlight-console"><div class="highlight"><pre><span></span><span class="gp">$</span> pip install https://github.com/jrderuiter/pyim/archive/0.2.0.tar.gz
+<p>IM-Fusion can also be installed from PyPI using pip:</p>
+<div class="code bash highlight-shell"><div class="highlight"><pre><span></span>pip install pyim
 </pre></div>
 </div>
-<p>If you don&#8217;t have <a class="reference external" href="https://pip.pypa.io">pip</a> installed, this <a class="reference external" href="http://docs.python-guide.org/en/latest/starting/installation/">Python installation guide</a> can guide
-you through the process.</p>
-</div>
-<div class="section" id="from-sources">
-<h3>From sources<a class="headerlink" href="#from-sources" title="Permalink to this headline">¶</a></h3>
-<p>The sources for PyIM can be downloaded from the <a class="reference external" href="https://github.com/jrderuiter/pyim">Github repo</a>.</p>
-<p>You can either clone the public repository:</p>
-<div class="highlight-console"><div class="highlight"><pre><span></span><span class="gp">$</span> git clone git://github.com/jrderuiter/pyim
-</pre></div>
-</div>
-<p>Or download the <a class="reference external" href="https://github.com/jrderuiter/pyim/tarball/master">tarball</a>:</p>
-<div class="highlight-console"><div class="highlight"><pre><span></span><span class="gp">$</span> curl  -OL https://github.com/jrderuiter/pyim/tarball/develop
-</pre></div>
-</div>
-<p>Once you have a copy of the source, you can install it with:</p>
-<div class="highlight-console"><div class="highlight"><pre><span></span><span class="gp">$</span> python setup.py install
-</pre></div>
-</div>
-</div>
-</div>
-<div class="section" id="using-bioconda">
-<h2>Using bioconda<a class="headerlink" href="#using-bioconda" title="Permalink to this headline">¶</a></h2>
-<p>Coming soon!</p>
+<p>Note that this does not install any of the required external dependencies,
+which must therefore be installed manually.</p>
 </div>
 </div>
 
@@ -262,7 +250,7 @@ you through the process.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'./',
-            VERSION:'0.2.0',
+            VERSION:'0.2.1',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'.html',
             HAS_SOURCE:  true,
