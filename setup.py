@@ -25,7 +25,7 @@ EXTRAS_REQUIRE = {
 
 setup(
     name='pyim',
-    version='0.2.0',
+    version='0.2.1',
     description=('Tool for identifying transposon insertions '
                  'from targeted DNA-sequencing data.'),
     long_description=README + '\n\n' + HISTORY,
