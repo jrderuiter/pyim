@@ -18,52 +18,36 @@ The following external dependencies are also required for full functionality:
 These external tools should be available in ``$PATH``. CIMPL, which is an R
 package, should be loadable in the default R installation.
 
+Using bioconda (recommended)
+----------------------------
+
+The recommended way to install PyIM is using bioconda, as this installs
+PyIM together with its external dependencies into an isolated environment
+using a single command:
+
+.. code:: bash
+
+  conda create -n pyim pyim
+
+This assumes that condas channels have been configured as recommended_
+by bioconda.
+
+.. _recommended: https://bioconda.github.io/#set-up-channels
+
+Alternatively, PyIM can be installed in an existing environment using:
+
+.. code:: bash
+
+  conda install pyim
+
 Using pip
 ---------
 
-Stable release
-~~~~~~~~~~~~~~
+IM-Fusion can also be installed from PyPI using pip:
 
-To install PyIM, run this command in your terminal:
+.. code:: bash
 
-.. code-block:: console
+    pip install pyim
 
-    $ pip install https://github.com/jrderuiter/pyim/archive/0.2.0.tar.gz
-
-If you don't have `pip`_ installed, this `Python installation guide`_ can guide
-you through the process.
-
-.. _pip: https://pip.pypa.io
-.. _Python installation guide: http://docs.python-guide.org/en/latest/starting/installation/
-
-From sources
-~~~~~~~~~~~~
-
-The sources for PyIM can be downloaded from the `Github repo`_.
-
-You can either clone the public repository:
-
-.. code-block:: console
-
-    $ git clone git://github.com/jrderuiter/pyim
-
-Or download the `tarball`_:
-
-.. code-block:: console
-
-    $ curl  -OL https://github.com/jrderuiter/pyim/tarball/develop
-
-Once you have a copy of the source, you can install it with:
-
-.. code-block:: console
-
-    $ python setup.py install
-
-
-.. _Github repo: https://github.com/jrderuiter/pyim
-.. _tarball: https://github.com/jrderuiter/pyim/tarball/master
-
-Using bioconda
---------------
-
-Coming soon!
+Note that this does not install any of the required external dependencies,
+which must therefore be installed manually.
