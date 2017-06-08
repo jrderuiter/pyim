@@ -11,7 +11,8 @@ with open('HISTORY.rst') as history_file:
 
 REQUIREMENTS = [
     'pyfaidx>=0.4.8.1', 'intervaltree>=2.1', 'tqdm>=4.7', 'toolz>=0.8',
-    'rpy2>=2.8.2', 'numpy', 'pandas>=0.18', 'pysam>=0.9', 'natsort', 'cutadapt'
+    'rpy2>=2.8.2', 'numpy', 'pandas>=0.18', 'pysam>=0.9', 'natsort',
+    'cutadapt >=1.8'
 ]
 
 EXTRAS_REQUIRE = {
@@ -24,7 +25,7 @@ EXTRAS_REQUIRE = {
 
 setup(
     name='pyim',
-    version='0.2.0',
+    version='0.2.1',
     description=('Tool for identifying transposon insertions '
                  'from targeted DNA-sequencing data.'),
     long_description=README + '\n\n' + HISTORY,
