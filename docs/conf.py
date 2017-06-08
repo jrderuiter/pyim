@@ -42,8 +42,9 @@ import pyim
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode',
-              'sphinx.ext.napoleon']
+extensions = [
+    'sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.napoleon'
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -59,7 +60,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'PyIM'
-copyright = u"2016, Julian de Ruiter"
+copyright = u"2017, Julian de Ruiter"
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
@@ -210,10 +211,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).
-latex_documents = [
-    ('index', 'pyim.tex', u'PyIM Documentation', u'Julian de Ruiter',
-     'manual'),
-]
+latex_documents = [('index', 'pyim.tex', u'PyIM Documentation',
+                    u'Julian de Ruiter', 'manual'), ]
 
 # The name of an image file (relative to this directory) to place at
 # the top of the title page.
@@ -239,9 +238,8 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    ('index', 'pyim', u'PyIM Documentation', [u'Julian de Ruiter'], 1)
-]
+man_pages = [('index', 'pyim', u'PyIM Documentation', [u'Julian de Ruiter'], 1)
+             ]
 
 # If true, show URL addresses after external links.
 #man_show_urls = False
