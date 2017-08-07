@@ -12,6 +12,13 @@ from . import util as shell
 def cutadapt(read_path, out_path, options, read2_path=None, out2_path=None):
     """Runs cutadapt using the given options."""
 
+    if (read2_path is None) != (out2_path is None):
+        raise ValueError('Both read2_path and out2_path must be specified '
+                         'for paired-end sequencing data')
+
+    output_dir = out_path.parent
+    output_dir.mkdir(exist_ok=True, parents=True)
+
     in1_path = read_path or '-'
     options = dict(options) if options is not None else {}
 
@@ -91,16 +98,20 @@ def _demultiplex(read_path, output_dir, barcode_path, error_rate):
     output_dir.mkdir(parents=True)
 
     # De-multiplex using cutadapt.
-    options = {'-g': 'file:' + str(barcode_path),
-               '--discard-untrimmed': True,
-               '-e': error_rate}
+    options = {
+        '-g': 'file:' + str(barcode_path),
+        '--discard-untrimmed': True,
+        '-e': error_rate
+    }
     output_base = output_dir / ('{name}' + read_path.suffixes[-1])
     cutadapt(read_path, output_base, options=options)
 
     # Identify output files.
     barcode_keys = pyfaidx.Fasta(str(barcode_path)).keys()
-    output_paths = {bc: Path(str(output_base).format(name=bc))
-                    for bc in barcode_keys}
+    output_paths = {
+        bc: Path(str(output_base).format(name=bc))
+        for bc in barcode_keys
+    }
 
     return output_paths
 
