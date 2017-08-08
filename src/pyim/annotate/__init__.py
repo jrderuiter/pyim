@@ -1,1 +1,2 @@
-from .annotators import get_annotators, WindowAnnotator, RbmAnnotator
+from .annotators import (AnnotatorCommand, Annotator, WindowAnnotator,
+                         RbmAnnotator)

@@ -1,7 +1,8 @@
 from pathlib import Path
 
-from .base import Annotator, CisAnnotator, register_annotator
+from .base import Annotator, AnnotatorCommand, CisAnnotator
 from .window import WindowAnnotator, Window
+from ..util import select_closest, filter_blacklist
 
 # Window format: (us, ua, ds, da)
 WINDOW_PRESETS = {
@@ -13,12 +14,11 @@ WINDOW_PRESETS = {
 
 class RbmAnnotator(Annotator):
     def __init__(self,
-                 reference_gtf,
+                 genes,
                  window_sizes=None,
                  preset=None,
                  closest=False,
-                 blacklist=None,
-                 verbose=True):
+                 blacklist=None):
         super().__init__()
 
         if window_sizes is None:
@@ -29,40 +29,21 @@ class RbmAnnotator(Annotator):
                 window_sizes = WINDOW_PRESETS[preset]
 
         windows = self._build_windows(window_sizes)
-        self._annotator = WindowAnnotator(
-            reference_gtf,
-            windows=windows,
-            closest=closest,
-            blacklist=blacklist,
-            verbose=verbose)
+        self._annotator = WindowAnnotator(windows=windows, genes=genes)
 
-    @classmethod
-    def configure_args(cls, parser):
-        super().configure_args(parser)
-
-        # Required arguments.
-        parser.add_argument('--reference_gtf', required=True, type=Path)
-
-        # Optional arguments.
-        group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('--preset', choices=WINDOW_PRESETS.keys())
-        group.add_argument('--window_sizes', nargs=4, type=int)
-
-        parser.add_argument('--closest', default=False, action='store_true')
-        parser.add_argument('--blacklist', nargs='+', default=None)
-
-    @classmethod
-    def parse_args(cls, args):
-        return {
-            'reference_gtf': args.reference_gtf,
-            'window_sizes': args.window_sizes,
-            'preset': args.preset,
-            'closest': args.closest,
-            'blacklist': args.blacklist
-        }
+        self._closest = closest
+        self._blacklist = blacklist
 
     def annotate(self, insertions):
-        return self._annotator.annotate(insertions)
+        annotated = self._annotator.annotate(insertions)
+
+        if self._closest:
+            annotated = select_closest(annotated)
+
+        if self._blacklist is not None:
+            annotated = filter_blacklist(annotated, self._blacklist)
+
+        yield from annotated
 
     def _build_windows(self, window_sizes):
         us, ua, ds, da = window_sizes
@@ -83,13 +64,55 @@ class RbmAnnotator(Annotator):
 
         return windows
 
-    @property
-    def gtf(self):
-        return self._annotator.gtf
 
+class RbmAnnotatorCommand(AnnotatorCommand):
 
-class RbmCisAnnotator(CisAnnotator, RbmAnnotator):
-    pass
+    name = 'rbm'
 
+    def configure(self, parser):
+        super().configure(parser)
 
-register_annotator('rbm', RbmCisAnnotator)
+        # Required arguments.
+        parser.add_argument('--gtf', required=True, type=Path)
+
+        # Optional arguments.
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument('--preset', choices=WINDOW_PRESETS.keys())
+        group.add_argument('--window_sizes', nargs=4, type=int)
+
+        parser.add_argument('--closest', default=False, action='store_true')
+        parser.add_argument('--blacklist', nargs='+', default=None)
+
+        parser.add_argument('--cis_sites', default=None, type=Path)
+
+    def run(self, args):
+        # Read insertions and genes.
+        insertions = self._read_insertions(args.insertions)
+        genes = self._read_genes_from_gtf(args.gtf)
+
+        # Setup annotator.
+        if args.cis_sites is not None:
+            cis_sites = list(self._read_cis_sites(args.cis_sites))
+
+            sub_annotator = RbmAnnotator(
+                genes=genes,
+                window_sizes=args.window_sizes,
+                preset=args.preset)
+
+            annotator = CisAnnotator(
+                annotator=sub_annotator,
+                genes=genes,
+                cis_sites=cis_sites,
+                closest=args.closest,
+                blacklist=args.blacklist)
+        else:
+            annotator = RbmAnnotator(
+                genes=genes,
+                window_sizes=args.window_sizes,
+                preset=args.preset,
+                closest=args.closest,
+                blacklist=args.blacklist)
+
+        # Annotate insertions and write output.
+        annotated = annotator.annotate(insertions)
+        self._write_output(args.output, insertions=annotated)

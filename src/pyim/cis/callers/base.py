@@ -1,34 +1,21 @@
-from abc import ABC, abstractclassmethod, abstractmethod
+import abc
 from pathlib import Path
 
-_registry = {}
+import toolz
+
+from pyim.main import Command
+from pyim.model import Insertion, CisSite
+from pyim.util.frozendict import frozendict
 
 
-def register_caller(name, cis_caller):
-    _registry[name] = cis_caller
+class CisCaller(abc.ABC):
+    """Base CisCaller class."""
 
-
-def get_callers():
-    return dict(_registry)
-
-
-class CisCaller(ABC):
     def __init__(self):
         pass
 
-    @abstractclassmethod
-    def configure_args(cls, parser):
-        parser.add_argument('--insertions', type=Path, required=True)
-        parser.add_argument('--output', type=Path, required=True)
-        parser.add_argument(
-            '--output_sites', type=Path, required=False, default=None)
-
-    @abstractclassmethod
-    def from_args(cls, args):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def call(self, insertions):
+    @abc.abstractmethod
+    def run(self, insertions):
         """Calls CIS sites for insertions.
 
         Parameters:
@@ -40,3 +27,36 @@ class CisCaller(ABC):
         """
 
         raise NotImplementedError()
+
+
+class CisCallerCommand(Command):
+    """Base CisCaller command."""
+
+    def configure(self, parser):
+        parser.add_argument('--insertions', type=Path, required=True)
+        parser.add_argument('--output', type=Path, required=True)
+        parser.add_argument(
+            '--output_sites', type=Path, required=False, default=None)
+
+    @staticmethod
+    def _annotate_insertions(insertions, cis_mapping):
+        """Annotates insertions with CIS sites using given mapping."""
+
+        for insertion in insertions:
+            cis_ids = cis_mapping.get(insertion.id, set())
+
+            for cis_id in cis_ids:
+                cis_metadata = {'cis_id': cis_id}
+                new_metadata = toolz.merge(insertion.metadata, cis_metadata)
+                yield insertion._replace(metadata=frozendict(new_metadata))
+
+    @staticmethod
+    def _write_outputs(insertions, cis_sites, args):
+        Insertion.to_csv(args.output, insertions, sep='\t', index=False)
+
+        if args.output_sites is None:
+            cis_path = args.output.with_suffix('.sites.txt')
+        else:
+            cis_path = args.output_sites
+
+        CisSite.to_csv(cis_path, cis_sites, sep='\t', index=False)

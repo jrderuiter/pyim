@@ -1,71 +1,76 @@
-from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
-import functools
-import itertools
+import abc
+from itertools import groupby, chain
 import operator
 from pathlib import Path
 
-from pyim.util.frozendict import frozendict
 import numpy as np
-import toolz
 
+from pyim.main import Command
 from pyim.model import Insertion, CisSite
-from ..metadata import add_metadata
+from pyim.util.pandas import GenomicDataFrame
 
-_registry = {}
-
-
-def register_annotator(name, annotator):
-    _registry[name] = annotator
+from ..util import filter_blacklist, select_closest, annotate_insertion
 
 
-def get_annotators():
-    return dict(_registry)
+class Annotator(abc.ABC):
+    """Base annotator class."""
+
+    @abc.abstractmethod
+    def annotate(self, insertions):
+        """Annotates given insertions with predicted target genes."""
 
 
-class Annotator(ABC):
-    def __init__(self):
-        pass
+class AnnotatorCommand(Command):
+    """Base annotator command."""
 
-    @classmethod
-    def configure_args(cls, parser):
+    def configure(self, parser):
         parser.add_argument('--insertions', type=Path, required=True)
         parser.add_argument('--output', type=Path, required=True)
 
-    @classmethod
-    def from_args(cls, args):
-        return cls(**cls.parse_args(args))
+    @staticmethod
+    def _read_insertions(insertion_path):
+        return Insertion.from_csv(insertion_path, sep='\t')
 
-    @abstractclassmethod
-    def parse_args(cls, args):
-        raise NotImplementedError()
+    @staticmethod
+    def _read_cis_sites(cis_path):
+        return CisSite.from_csv(cis_path, sep='\t')
 
-    @abstractmethod
-    def annotate(self, insertions):
-        raise NotImplementedError()
+    @staticmethod
+    def _read_genes_from_gtf(gtf_path):
+        genes = GenomicDataFrame.from_gtf(gtf_path, feature='gene')
+        genes['strand'] = genes['strand'].map({'+': 1, '-': -1})
+        return genes
 
-    @abstractproperty
-    def gtf(self):
-        raise NotImplementedError()
+    @staticmethod
+    def _write_output(output_path, insertions):
+        Insertion.to_csv(output_path, insertions, sep='\t', index=False)
 
 
 class CisAnnotator(Annotator):
-    def __init__(self, *args, cis_sites=None, drop_cis_id=False, **kwargs):
-        super().__init__(*args, **kwargs)
+    """CIS annotator class."""
 
-        self._cis_sites = self._preprocess_sites(cis_sites)
-        self._drop_cis_id = drop_cis_id
+    def __init__(self,
+                 annotator,
+                 genes,
+                 cis_sites,
+                 closest=False,
+                 blacklist=None):
+        super().__init__()
 
-    def _preprocess_sites(self, cis_sites):
-        """Pre-process cis sites, fixing unstrandedness etc."""
+        if cis_sites is not None:
+            # Copy unstranded CISs to both strands.
+            cis_sites = self._expand_unstranded_sites(cis_sites)
 
-        # Copy CISs that are unstranded to both strands.
-        if cis_sites is None:
-            return None
-        else:
-            return list(self._expand_unstranded_sites(cis_sites))
+        self._annotator = annotator
+        self._genes = genes.set_index('gene_id')
+
+        self._cis_sites = cis_sites
+        self._closest = closest
+        self._blacklist = blacklist
 
     @staticmethod
     def _expand_unstranded_sites(cis_sites):
+        """Copies unstranded CISs to both strands."""
         for cis in cis_sites:
             if np.isnan(cis.strand) or cis.strand is None:
                 yield cis._replace(strand=1)
@@ -73,77 +78,40 @@ class CisAnnotator(Annotator):
             else:
                 yield cis
 
-    @classmethod
-    def configure_args(cls, parser):
-        super().configure_args(parser)
-        parser.add_argument('--cis_sites', default=None, type=Path)
-        parser.add_argument(
-            '--drop_cis_id', default=False, action='store_true')
-
-    @classmethod
-    def parse_args(cls, args):
-        parsed = super().parse_args(args)
-
-        if args.cis_sites is not None:
-            cis_cols = ['id', 'chromosome', 'position', 'strand']
-            cis_sites = list(
-                CisSite.from_csv(
-                    args.cis_sites, usecols=cis_cols, sep='\t'))
-        else:
-            cis_sites = None
-
-        cis_args = {'cis_sites': cis_sites, 'drop_cis_id': args.drop_cis_id}
-
-        return toolz.merge(parsed, cis_args)
-
     def annotate(self, insertions):
-        if self._cis_sites is None:
-            yield from super().annotate(insertions)
-        else:
-            yield from self._annotate_cis(insertions)
+        # Annotate cis sites.
+        annotated_sites = self._annotator.annotate(self._cis_sites)
+        cis_gene_mapping = self._extract_gene_mapping(annotated_sites)
 
-    def _annotate_cis(self, insertions):
-        # Annotate CIS sites.
-        annotated_sites = super().annotate(self._cis_sites)
+        # Annotate insertions.
+        annotated = chain.from_iterable(
+            (self._annotate_insertion(ins, cis_gene_mapping)
+             for ins in insertions))
 
-        # Create CIS --> gene map using annotations.
-        id_getter = operator.attrgetter('id')
-        annotated_sites = sorted(annotated_sites, key=id_getter)
-        grouped_sites = itertools.groupby(annotated_sites, key=id_getter)
+        # Filter for closest/gene and blacklist.
+        if self._closest:
+            annotated = select_closest(annotated)
 
-        cis_map = {
-            cis_id: {(item.metadata['gene_name'], item.metadata['gene_id'])
-                     for item in group if 'gene_name' in item.metadata}
-            for cis_id, group in grouped_sites
-        }
+        if self._blacklist is not None:
+            annotated = filter_blacklist(annotated, self._blacklist)
 
-        # Annotate insertions, drop any duplicates and add metadata.
-        annotated_ins = set(self._annotate_insertions(insertions, cis_map))
-        annotated_ins = add_metadata(annotated_ins, reference_gtf=self.gtf)
+        yield from annotated
 
-        yield from annotated_ins
+    @staticmethod
+    def _extract_gene_mapping(annotated_sites):
+        """Extracts CIS --> gene mapping from annotated CIS sites."""
 
-    def _annotate_insertions(self, insertions, cis_map):
-        for insertion in insertions:
-            genes = cis_map.get(insertion.metadata['cis_id'], set())
+        tuples = ((site.id, site.metadata.gene_id) for site in annotated_sites)
+        grouped = groupby(sorted(tuples), key=operator.itemgetter(0))
 
-            if len(genes) > 0:
-                for gene_name, gene_id in genes:
-                    metadata = {'gene_id': gene_id, 'gene_name': gene_name}
-                    metadata = toolz.merge(insertion.metadata, metadata)
+        return {id_: set(tup[1] for tup in tuples) for id_, tuples in grouped}
 
-                    if self._drop_cis_id:
-                        metadata.pop('cis_id')
+    def _annotate_insertion(self, insertion, cis_gene_mapping):
+        """Annotates an insertion using genes from mapping."""
 
-                    yield insertion._replace(metadata=frozendict(metadata))
-            else:
-                if self._drop_cis_id:
-                    metadata = dict(insertion.metadata)
-                    metadata.pop('cis_id')
-                    yield insertion._replace(metadata=frozendict(metadata))
-                else:
-                    yield insertion
+        # Lookup hits in mapping.
+        gene_ids = cis_gene_mapping[insertion.metadata.cis_id]
+        hits = self._genes.loc[gene_ids]
 
-    @property
-    def gtf(self):
-        return super().gtf
+        # Annotate insertion with identified hits.
+        yield from annotate_insertion(insertion, hits)

@@ -30,7 +30,7 @@ class Aligner(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def run(self, read_paths, work_dir=None, **kwargs):
+    def run(self, read_paths, work_dir=None):
         """Runs the pipeline, producing a table of identified insertions.
 
         Parameters

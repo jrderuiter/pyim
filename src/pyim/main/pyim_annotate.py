@@ -2,25 +2,15 @@ import argparse
 
 from natsort import order_by_index, index_natsorted
 
-from pyim.annotate import get_annotators
+from pyim.annotate import AnnotatorCommand
 from pyim.model import Insertion
 
 
 def main():
     """Main function for pyim-annotate."""
+
     args = parse_args()
-
-    insertions = Insertion.from_csv(args.insertions, sep='\t')
-
-    annotator = args.caller.from_args(args)
-    annotated = list(annotator.annotate(insertions))
-
-    annotated_frame = Insertion.to_frame(annotated)
-
-    annotated_frame = annotated_frame.reindex(index=order_by_index(
-        annotated_frame.index, index_natsorted(annotated_frame.id)))
-
-    annotated_frame.to_csv(str(args.output), sep='\t', index=False)
+    args.command.run(args)
 
 
 def parse_args():
@@ -32,10 +22,12 @@ def parse_args():
     subparsers.required = True
 
     # Register pipelines.
-    for name, class_ in get_annotators().items():
-        cis_parser = subparsers.add_parser(name)
-        class_.configure_args(cis_parser)
-        cis_parser.set_defaults(caller=class_)
+    commands = AnnotatorCommand.available_commands()
+
+    for name, command in commands.items():
+        cmd_parser = subparsers.add_parser(name)
+        command.configure(cmd_parser)
+        cmd_parser.set_defaults(command=command)
 
     return parser.parse_args()
 

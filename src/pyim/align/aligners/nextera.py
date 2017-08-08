@@ -13,7 +13,7 @@ from pyim.model import Insertion
 from pyim.util.path import WorkDirectory, shorten_path, extract_suffix
 
 from .base import Aligner, PairedEndCommand
-from ..util import extract_insertions
+from ..util import AlignmentSummary
 
 
 class NexteraAligner(Aligner):
@@ -77,6 +77,7 @@ class NexteraAligner(Aligner):
                  min_mapq=23,
                  merge_distance=None,
                  threads=1,
+                 sample_name=None,
                  logger=None):
         super().__init__()
 
@@ -91,10 +92,18 @@ class NexteraAligner(Aligner):
         self._merge_distance = merge_distance
         self._threads = threads
 
+        self._sample_name = sample_name
+
         self._logger = logger or logging.getLogger()
 
     def trim(self, read_paths, output_paths, work_dir=None):
         """Trims reads to remove transposon/nextera sequences."""
+
+        # if logger is not None:
+        #     logger.info('Extracting genomic sequences')
+        #     logger.info('  %-18s: %s', 'Transposon',
+        #                 shorten_path(self._transposon_path))
+        #     logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
         self._check_read_paths(read_paths)
         suffix = extract_suffix(read_paths[0])
@@ -188,31 +197,44 @@ class NexteraAligner(Aligner):
         bam_file = pysam.AlignmentFile(str(bam_path))
 
         try:
-            insertions = extract_insertions(
+            summary = AlignmentSummary.from_alignments(
                 iter(bam_file),
-                func=_process_mates,
-                paired=True,
-                merge_dist=self._merge_distance,
+                position_func=self._position_for_mates,
+                sample_func=lambda m1, m2: self._sample_name,
                 min_mapq=self._min_mapq,
-                min_support=self._min_support,
-                logger=None)
+                paired=True)
         finally:
             bam_file.close()
 
-        return insertions
+        if self._merge_distance is not None:
+            summary = summary.merge_within_distance(self._merge_distance)
+
+        insertions = summary.to_insertions(min_support=self._min_support)
+
+        yield from insertions
+
+    @staticmethod
+    def _position_for_mates(mate1, mate2):
+        """Returns transposon/linker positions for given mates."""
+
+        ref = mate1.reference_name
+
+        if mate1.is_reverse:
+            transposon_pos = mate2.reference_start
+            linker_pos = mate1.reference_end
+            strand = 1
+        else:
+            transposon_pos = mate2.reference_end
+            linker_pos = mate1.reference_start
+            strand = -1
+
+        return (ref, transposon_pos, strand), linker_pos
 
     def run(self, read_paths, work_dir=None):
         """Runs aligner on given read files."""
 
         self._check_read_paths(read_paths)
         suffix = extract_suffix(read_paths[0])
-
-        # Extract genomic sequences.
-        # if logger is not None:
-        #     logger.info('Extracting genomic sequences')
-        #     logger.info('  %-18s: %s', 'Transposon',
-        #                 shorten_path(self._transposon_path))
-        #     logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
         with WorkDirectory(work_dir, keep=work_dir is not None) as work_dir:
             # Trim reads and align to reference.
@@ -224,24 +246,9 @@ class NexteraAligner(Aligner):
             self.align(trimmed_paths, output_path=alignment_path)
 
             # Extract insertions.
-            insertions = self.extract(alignment_path)
+            insertions = list(self.extract(alignment_path))
 
         return insertions
-
-
-def _process_mates(mate1, mate2):
-    ref = mate1.reference_name
-
-    if mate1.is_reverse:
-        transposon_pos = mate2.reference_start
-        linker_pos = mate1.reference_end
-        strand = 1
-    else:
-        transposon_pos = mate2.reference_end
-        linker_pos = mate1.reference_start
-        strand = -1
-
-    return (ref, transposon_pos, strand), linker_pos
 
 
 class NexteraCommand(PairedEndCommand):
@@ -254,6 +261,8 @@ class NexteraCommand(PairedEndCommand):
 
         parser.add_argument('--transposon', type=Path, required=True)
         parser.add_argument('--bowtie_index', type=Path, required=True)
+
+        parser.add_argument('--sample_name', required=True)
 
         parser.add_argument('--min_length', type=int, default=15)
         parser.add_argument('--min_support', type=int, default=2)
@@ -278,6 +287,7 @@ class NexteraCommand(PairedEndCommand):
             min_mapq=args.min_mapq,
             merge_distance=args.merge_distance,
             bowtie_options=bowtie_options,
+            sample_name=args.sample_name,
             threads=args.threads)
 
         args.output.parent.mkdir(exist_ok=True, parents=True)
