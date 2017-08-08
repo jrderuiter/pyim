@@ -4,12 +4,13 @@ import operator
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from pyim.main import Command
 from pyim.model import Insertion, CisSite
 from pyim.util.pandas import GenomicDataFrame
 
-from ..util import filter_blacklist, select_closest, annotate_insertion
+from ..util import annotate_insertion
 
 
 class Annotator(abc.ABC):
@@ -62,7 +63,7 @@ class CisAnnotator(Annotator):
             cis_sites = self._expand_unstranded_sites(cis_sites)
 
         self._annotator = annotator
-        self._genes = genes.set_index('gene_id')
+        self._genes = genes.set_index('gene_id', drop=False)
 
         self._cis_sites = cis_sites
         self._closest = closest
@@ -88,20 +89,14 @@ class CisAnnotator(Annotator):
             (self._annotate_insertion(ins, cis_gene_mapping)
              for ins in insertions))
 
-        # Filter for closest/gene and blacklist.
-        if self._closest:
-            annotated = select_closest(annotated)
-
-        if self._blacklist is not None:
-            annotated = filter_blacklist(annotated, self._blacklist)
-
         yield from annotated
 
     @staticmethod
     def _extract_gene_mapping(annotated_sites):
         """Extracts CIS --> gene mapping from annotated CIS sites."""
 
-        tuples = ((site.id, site.metadata.gene_id) for site in annotated_sites)
+        tuples = ((site.id, site.metadata['gene_id'])
+                  for site in annotated_sites if 'gene_id' in site.metadata)
         grouped = groupby(sorted(tuples), key=operator.itemgetter(0))
 
         return {id_: set(tup[1] for tup in tuples) for id_, tuples in grouped}
@@ -110,8 +105,12 @@ class CisAnnotator(Annotator):
         """Annotates an insertion using genes from mapping."""
 
         # Lookup hits in mapping.
-        gene_ids = cis_gene_mapping[insertion.metadata.cis_id]
-        hits = self._genes.loc[gene_ids]
+        gene_ids = cis_gene_mapping.get(insertion.metadata['cis_id'], None)
+
+        if gene_ids is None:
+            hits = pd.DataFrame().reindex(columns=self._genes.columns)
+        else:
+            hits = self._genes.loc[gene_ids]
 
         # Annotate insertion with identified hits.
         yield from annotate_insertion(insertion, hits)

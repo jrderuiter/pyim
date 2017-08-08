@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from pyim.util.pandas import GenomicDataFrame
+
 from .base import Annotator, AnnotatorCommand, CisAnnotator
 from ..util import filter_blacklist, select_closest, annotate_insertion
 
@@ -25,8 +27,8 @@ class WindowAnnotator(Annotator):
         """Creates instance using given window size."""
 
         window = Window(
-            upstream=window_size // 2,
-            downstream=window_size // 2,
+            upstream=window_size,
+            downstream=window_size,
             strand=None,
             name=None,
             strict_left=False,
@@ -35,17 +37,8 @@ class WindowAnnotator(Annotator):
         return cls(genes=genes, windows=[window], **kwargs)
 
     def annotate(self, insertions):
-
-        annotated = chain.from_iterable((self._annotate_insertion(ins)
-                                         for ins in insertions))
-
-        if self._closest:
-            annotated = select_closest(annotated)
-
-        if self._blacklist is not None:
-            annotated = filter_blacklist(annotated, self._blacklist)
-
-        yield from annotated
+        yield from chain.from_iterable((self._annotate_insertion(ins)
+                                        for ins in insertions))
 
     def _annotate_insertion(self, insertion):
         # Identify overlapping features.
@@ -61,19 +54,30 @@ class WindowAnnotator(Annotator):
 
         hits = pd.concat(hits, axis=0, ignore_index=True)
 
+        # Filter for closest/blacklist.
+        if self._closest:
+            hits = select_closest(insertion, hits)
+
+        if self._blacklist is not None:
+            hits = filter_blacklist(hits, self._blacklist)
+
         # Annotate insertion with identified hits.
         yield from annotate_insertion(insertion, hits)
 
     def _get_genes(self, region):
-        overlap = self._genes.search(
-            region.chromosome,
-            region.start,
-            region.end,
-            strict_left=region.strict_left,
-            strict_right=region.strict_right)
+        try:
+            overlap = self._genes.search(
+                region.chromosome,
+                region.start,
+                region.end,
+                strict_left=region.strict_left,
+                strict_right=region.strict_right)
 
-        if region.strand is not None:
-            overlap = overlap.loc[overlap['strand'] == region.strand]
+            if region.strand is not None:
+                overlap = overlap.loc[overlap['strand'] == region.strand]
+        except KeyError:
+            overlap = GenomicDataFrame(pd.DataFrame().reindex(
+                columns=self._genes.columns))
 
         return overlap
 

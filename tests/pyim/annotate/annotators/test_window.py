@@ -1,24 +1,29 @@
-from pyim.annotate.annotators.window import (Window, WindowAnnotator,
-                                             WindowCisAnnotator)
+from pyim.annotate.annotators.window import Window, WindowAnnotator
 
 # pylint: disable=redefined-outer-name
 
 
-def build_window(size):
-    return Window(
-        -(size // 2), (size // 2),
-        strand=None,
-        name=None,
-        strict_left=False,
-        strict_right=False)
-
-
 class TestWindowAnnotator(object):
-    def test_basic(self, insertions, gtf_path):
-        annotator = WindowAnnotator(
-            gtf_path, [build_window(20000)], verbose=False)
+    """Unit tests for annotation using the WindowAnnotator."""
+
+    def test_basic(self, insertions, genes):
+        """Test simple example of annotating three insertions.
+
+        The first two insertions should be annotated with Trp53bp2/Myh9
+        respectively. The third should not be annotated with any gene,
+        as this insertion occurs on a chromosome that does not contain
+        any genes.
+
+        Note that this should NOT raise an error for the non-existing
+        chromosome.
+        """
+
+        # Annotate insertions.
+        annotator = WindowAnnotator.from_window_size(
+            genes=genes, window_size=20000)
         annotated = list(annotator.annotate(insertions))
 
+        # Verify annotations.
         metadata1 = annotated[0].metadata
         assert metadata1['gene_name'] == 'Trp53bp2'
         assert metadata1['gene_id'] == 'ENSMUSG00000026510'
@@ -31,29 +36,33 @@ class TestWindowAnnotator(object):
         assert metadata2['gene_distance'] == 2000
         assert metadata2['gene_orientation'] == 'antisense'
 
+        # Check that last insertion was not annotated.
         assert 'gene_name' not in annotated[2].metadata
 
-    def test_small_window(self, insertions, gtf_path):
-        annotator = WindowAnnotator(
-            gtf_path, [build_window(2000)], verbose=False)
+    def test_small_window(self, insertions, genes):
+        """Test example with smaller window. Should not annotate Myh9."""
+
+        annotator = WindowAnnotator.from_window_size(genes, window_size=1500)
         annotated = list(annotator.annotate(insertions))
 
         assert annotated[0].metadata['gene_name'] == 'Trp53bp2'
         assert 'gene_name' not in annotated[1].metadata
         assert 'gene_name' not in annotated[2].metadata
 
-    def test_blacklist(self, insertions, gtf_path):
-        annotator = WindowAnnotator(
-            gtf_path, [build_window(20000)],
-            verbose=False,
-            blacklist={'Trp53bp2'})
+    def test_blacklist(self, insertions, genes):
+        """Test with blacklisted gene. Should not annotate Trp53bp2."""
+
+        annotator = WindowAnnotator.from_window_size(
+            genes, window_size=20000, blacklist={'ENSMUSG00000026510'})
         annotated = list(annotator.annotate(insertions))
 
         assert 'gene_name' not in annotated[0].metadata
 
-    def test_multiple(self, insertions, gtf_path):
-        annotator = WindowAnnotator(
-            gtf_path, [build_window(200000000)], verbose=False)
+    def test_multiple(self, insertions, genes):
+        """Test with multiple gene annotations."""
+
+        annotator = WindowAnnotator.from_window_size(
+            genes, window_size=200000000)
         annotated = list(annotator.annotate(insertions))
 
         assert len(annotated) == 4
@@ -61,30 +70,18 @@ class TestWindowAnnotator(object):
         assert annotated[0].id == 'INS1'
         assert annotated[1].id == 'INS1'
 
-        genes = {annotated[0].metadata['gene_name'],
-                 annotated[1].metadata['gene_name']}
+        genes = {
+            annotated[0].metadata['gene_name'],
+            annotated[1].metadata['gene_name']
+        }
         assert genes == {'Ppp1r12b', 'Trp53bp2'}
 
-    def test_select_closest(self, insertions, gtf_path):
-        annotator = WindowAnnotator(
-            gtf_path, [build_window(200000000)], closest=True, verbose=False)
+    def test_select_closest(self, insertions, genes):
+        """Test with selection for closest gene."""
+
+        annotator = WindowAnnotator.from_window_size(
+            genes, window_size=200000000, closest=True)
         annotated = list(annotator.annotate(insertions))
 
         assert len(annotated) == 3
         assert annotated[0].metadata['gene_name'] == 'Trp53bp2'
-
-
-class TestWindowCisAnnotator(object):
-    def test_basic(self, cis_insertions, cis_sites, gtf_path):
-        annotator = WindowCisAnnotator(
-            gtf_path, [build_window(20000)],
-            cis_sites=cis_sites,
-            verbose=False)
-
-        annotated = {ins.id: ins for ins in annotator.annotate(cis_insertions)}
-
-        assert annotated['INS1'].metadata['cis_id'] == 'CIS1'
-        assert annotated['INS1'].metadata['gene_name'] == 'Trp53bp2'
-
-        assert annotated['INS2'].metadata['cis_id'] == 'CIS2'
-        assert 'gene_name' not in annotated['INS2'].metadata

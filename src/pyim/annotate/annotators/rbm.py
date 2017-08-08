@@ -29,21 +29,11 @@ class RbmAnnotator(Annotator):
                 window_sizes = WINDOW_PRESETS[preset]
 
         windows = self._build_windows(window_sizes)
-        self._annotator = WindowAnnotator(windows=windows, genes=genes)
-
-        self._closest = closest
-        self._blacklist = blacklist
+        self._annotator = WindowAnnotator(
+            windows=windows, genes=genes, closest=closest, blacklist=blacklist)
 
     def annotate(self, insertions):
-        annotated = self._annotator.annotate(insertions)
-
-        if self._closest:
-            annotated = select_closest(annotated)
-
-        if self._blacklist is not None:
-            annotated = filter_blacklist(annotated, self._blacklist)
-
-        yield from annotated
+        yield from self._annotator.annotate(insertions)
 
     def _build_windows(self, window_sizes):
         us, ua, ds, da = window_sizes
