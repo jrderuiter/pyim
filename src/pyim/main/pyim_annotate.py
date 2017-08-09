@@ -2,7 +2,7 @@ import argparse
 
 from natsort import order_by_index, index_natsorted
 
-from pyim.annotate import AnnotatorCommand
+from pyim.annotate.annotators import AnnotatorCommand
 from pyim.model import Insertion
 
 
