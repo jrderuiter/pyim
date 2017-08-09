@@ -87,14 +87,12 @@ class RbmAnnotatorCommand(AnnotatorCommand):
             sub_annotator = RbmAnnotator(
                 genes=genes,
                 window_sizes=args.window_sizes,
-                preset=args.preset)
-
-            annotator = CisAnnotator(
-                annotator=sub_annotator,
-                genes=genes,
-                cis_sites=cis_sites,
+                preset=args.preset,
                 closest=args.closest,
                 blacklist=args.blacklist)
+
+            annotator = CisAnnotator(
+                annotator=sub_annotator, genes=genes, cis_sites=cis_sites)
         else:
             annotator = RbmAnnotator(
                 genes=genes,

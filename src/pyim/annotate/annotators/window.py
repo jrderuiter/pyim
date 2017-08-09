@@ -161,14 +161,13 @@ class WindowAnnotatorCommand(AnnotatorCommand):
             cis_sites = list(self._read_cis_sites(args.cis_sites))
 
             sub_annotator = WindowAnnotator.from_window_size(
-                genes=genes, window_size=args.window_size)
-
-            annotator = CisAnnotator(
-                annotator=sub_annotator,
                 genes=genes,
-                cis_sites=cis_sites,
+                window_size=args.window_size,
                 closest=args.closest,
                 blacklist=args.blacklist)
+
+            annotator = CisAnnotator(
+                annotator=sub_annotator, genes=genes, cis_sites=cis_sites)
         else:
             annotator = WindowAnnotator.from_window_size(
                 genes=genes,

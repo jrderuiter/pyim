@@ -50,12 +50,7 @@ class AnnotatorCommand(Command):
 class CisAnnotator(Annotator):
     """CIS annotator class."""
 
-    def __init__(self,
-                 annotator,
-                 genes,
-                 cis_sites,
-                 closest=False,
-                 blacklist=None):
+    def __init__(self, annotator, genes, cis_sites):
         super().__init__()
 
         if cis_sites is not None:
@@ -64,10 +59,7 @@ class CisAnnotator(Annotator):
 
         self._annotator = annotator
         self._genes = genes.set_index('gene_id', drop=False)
-
         self._cis_sites = cis_sites
-        self._closest = closest
-        self._blacklist = blacklist
 
     @staticmethod
     def _expand_unstranded_sites(cis_sites):
