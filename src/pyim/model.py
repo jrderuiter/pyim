@@ -2,10 +2,11 @@
 
 from collections import namedtuple
 
-from pyim.util.frozendict import frozendict
 import numpy as np
 import pandas as pd
 import toolz
+
+from pyim.vendor.frozendict import frozendict
 
 
 class MetadataFrameMixin(object):

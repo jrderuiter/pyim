@@ -2,9 +2,8 @@ from collections import namedtuple
 from itertools import chain
 from pathlib import Path
 
+from genopandas import GenomicDataFrame
 import pandas as pd
-
-from pyim.util.pandas import GenomicDataFrame
 
 from .base import Annotator, AnnotatorCommand, CisAnnotator
 from ..util import filter_blacklist, select_closest, annotate_insertion
@@ -66,7 +65,7 @@ class WindowAnnotator(Annotator):
 
     def _get_genes(self, region):
         try:
-            overlap = self._genes.search(
+            overlap = self._genes.gi.search(
                 region.chromosome,
                 region.start,
                 region.end,

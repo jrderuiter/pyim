@@ -1,11 +1,12 @@
 import argparse
 import logging
 
-from pyim.util.frozendict import frozendict
 import toolz
 
 from pyim.cis import CisCallerCommand
 from pyim.model import Insertion, CisSite
+from pyim.vendor.frozendict import frozendict
+
 
 logging.basicConfig(
     format='[%(asctime)-15s]  %(message)s',

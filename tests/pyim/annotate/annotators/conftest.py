@@ -1,10 +1,10 @@
 from pathlib import Path
 
+from genopandas import GenomicDataFrame
 import pytest
 
 from pyim.model import Insertion, CisSite
-from pyim.util.frozendict import frozendict
-from pyim.util.pandas import GenomicDataFrame
+from pyim.vendor.frozendict import frozendict
 
 
 @pytest.fixture(scope='session')
@@ -16,7 +16,8 @@ def gtf_path():
 @pytest.fixture(scope='session')
 def genes(gtf_path):
     """Genes from example GTF file."""
-    genes = GenomicDataFrame.from_gtf(gtf_path, feature='gene')
+    genes = GenomicDataFrame.from_gtf(
+        gtf_path, filter_=lambda rec: rec['feature'] == 'gene')
     genes['strand'] = genes['strand'].map({'+': 1, '-': -1})
     return genes
 

@@ -2,7 +2,7 @@ import itertools
 
 import numpy as np
 
-from pyim.util.frozendict import frozendict
+from pyim.vendor.frozendict import frozendict
 
 
 def select_closest(insertion, genes):

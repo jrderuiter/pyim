@@ -290,7 +290,7 @@ class NexteraCommand(PairedEndCommand):
             sample_name=args.sample_name,
             threads=args.threads)
 
-        args.output.parent.mkdir(exist_ok=True, parents=True)
-
         insertions = aligner.run(args.reads, work_dir=args.work_dir)
+
+        args.output.parent.mkdir(exist_ok=True, parents=True)
         Insertion.to_csv(args.output, insertions, sep='\t', index=False)

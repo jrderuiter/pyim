@@ -1,11 +1,11 @@
-import abc
+ import abc
 from pathlib import Path
 
 import toolz
 
 from pyim.main import Command
 from pyim.model import Insertion, CisSite
-from pyim.util.frozendict import frozendict
+from pyim.vendor.frozendict import frozendict
 
 
 class CisCaller(abc.ABC):

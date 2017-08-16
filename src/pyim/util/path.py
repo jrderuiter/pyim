@@ -1,3 +1,5 @@
+"""Utility functions for manipulating paths."""
+
 import os
 
 from contextlib import contextmanager

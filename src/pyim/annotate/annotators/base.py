@@ -3,12 +3,12 @@ from itertools import groupby, chain
 import operator
 from pathlib import Path
 
+from genopandas import GenomicDataFrame
 import numpy as np
 import pandas as pd
 
 from pyim.main import Command
 from pyim.model import Insertion, CisSite
-from pyim.util.pandas import GenomicDataFrame
 
 from ..util import annotate_insertion
 
@@ -38,7 +38,8 @@ class AnnotatorCommand(Command):
 
     @staticmethod
     def _read_genes_from_gtf(gtf_path):
-        genes = GenomicDataFrame.from_gtf(gtf_path, feature='gene')
+        genes = GenomicDataFrame.from_gtf(
+            gtf_path, filter_=lambda rec: rec['feature'] == 'gene')
         genes['strand'] = genes['strand'].map({'+': 1, '-': -1})
         return genes
 

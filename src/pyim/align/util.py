@@ -4,7 +4,7 @@ from itertools import groupby, chain
 import numpy as np
 
 from pyim.model import Insertion
-from pyim.util.frozendict import frozendict
+from pyim.vendor.frozendict import frozendict
 
 
 class AlignmentSummary(object):
