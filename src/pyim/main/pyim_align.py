@@ -10,7 +10,7 @@ of sequencing data.
 import argparse
 import logging
 
-from pyim.align.pipelines import get_pipelines
+from pyim.align.aligners import AlignerCommand
 
 logging.basicConfig(
     format='[%(asctime)-15s]  %(message)s',
@@ -22,14 +22,7 @@ def main():
     """Main function for pyim-align."""
 
     args = parse_args()
-
-    # Run pipeline.
-    reads2 = args.reads2 if hasattr(args, 'reads2') else None
-
-    pipeline = args.pipeline.from_args(args)
-    pipeline.run(read_path=args.reads,
-                 output_dir=args.output_dir,
-                 read2_path=reads2)
+    args.command.run(args)
 
 
 def parse_args():
@@ -37,18 +30,16 @@ def parse_args():
 
     # Setup main parser.
     parser = argparse.ArgumentParser(prog='pyim-align')
-    subparsers = parser.add_subparsers(dest='pipeline')
+    subparsers = parser.add_subparsers(dest='aligner')
     subparsers.required = True
 
     # Register pipelines.
-    pipelines = get_pipelines()
+    commands = AlignerCommand.available_commands()
 
-    for pipeline_name in sorted(pipelines.keys()):
-        pipeline_class = pipelines[pipeline_name]
-
-        pipeline_parser = subparsers.add_parser(pipeline_name)
-        pipeline_class.configure_args(pipeline_parser)
-        pipeline_parser.set_defaults(pipeline=pipeline_class)
+    for name, command in commands.items():
+        cmd_parser = subparsers.add_parser(name)
+        command.configure(cmd_parser)
+        cmd_parser.set_defaults(command=command)
 
     return parser.parse_args()
 

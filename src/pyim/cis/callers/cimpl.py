@@ -9,7 +9,7 @@ from pyim.util.rpy2 import pandas_to_dataframe, dataframe_to_pandas
 from pyim.model import Insertion, CisSite
 from pyim.util import add_prefix, remove_prefix
 
-from .base import CisCaller, register_caller
+from .base import CisCaller, CisCallerCommand
 from ..util import assign_strand, invert_otm_mapping
 
 R_GENOMES = {'mm10': 'BSgenome.Mmusculus.UCSC.mm10'}
@@ -52,34 +52,6 @@ class CimplCisCaller(CisCaller):
         if self.__cimpl is None:
             self.__cimpl = importr('cimpl')
         return self.__cimpl
-
-    @classmethod
-    def configure_args(cls, parser):
-        super().configure_args(parser)
-
-        parser.add_argument('--pattern', required=True)
-
-        parser.add_argument('--genome', default='mm10')
-        parser.add_argument('--scales', default=(10000, 30000),
-                            nargs='+', type=int)  # yapf: disable
-        parser.add_argument('--chromosomes', default=None, nargs='+')
-        parser.add_argument('--alpha', default=0.05, type=float)
-        parser.add_argument('--lhc_method', default='exclude')
-        parser.add_argument('--iterations', default=1000, type=int)
-        parser.add_argument('--threads', default=1, type=int)
-        parser.add_argument(
-            '--min_strand_homogeneity', default=0.75, type=float)
-
-    @classmethod
-    def from_args(cls, args):
-        return cls(pattern=args.pattern,
-                   genome=args.genome,
-                   chromosomes=args.chromosomes,
-                   alpha=args.alpha,
-                   lhc_method=args.lhc_method,
-                   iterations=args.iterations,
-                   threads=args.threads,
-                   min_strand_homogeneity=args.min_strand_homogeneity)
 
     def call(self, insertions):
         """Runs CIMPL on insertions."""
@@ -194,9 +166,10 @@ class CimplCisCaller(CisCaller):
         cis_frame['strand'] = None
 
         # Convert to CisSite objects using a subset of the columns.
-        cis_frame_subset = cis_frame[['id', 'chromosome', 'position', 'start',
-                                      'end', 'scale', 'pvalue', 'n_insertions',
-                                      'height', 'width', 'strand']]
+        cis_frame_subset = cis_frame[[
+            'id', 'chromosome', 'position', 'start', 'end', 'scale', 'pvalue',
+            'n_insertions', 'height', 'width', 'strand'
+        ]]
         cis_sites = list(CisSite.from_frame(cis_frame_subset))
 
         return cis_sites
@@ -229,8 +202,9 @@ class CimplCisCaller(CisCaller):
         # Melt matrix into long format.
         mapping = pd.melt(cis_matrix_scales, id_vars=['id'])
         mapping = mapping[['id', 'value']]
-        mapping = mapping.rename(columns={'id': 'insertion_id',
-                                          'value': 'cis_id'})
+        mapping = mapping.rename(
+            columns={'id': 'insertion_id',
+                     'value': 'cis_id'})
 
         # Split cis_id column into individual entries (for entries
         # with multiple ids). Then drop any empty rows, as these
@@ -238,13 +212,54 @@ class CimplCisCaller(CisCaller):
         mapping = mapping.ix[mapping['cis_id'] != '']
         mapping = expand_column(mapping, col='cis_id', delimiter='|')
 
-        mapping_dict = {ins_id: set(grp['cis_id'])
-                        for ins_id, grp in mapping.groupby('insertion_id')}
+        mapping_dict = {
+            ins_id: set(grp['cis_id'])
+            for ins_id, grp in mapping.groupby('insertion_id')
+        }
 
         return mapping_dict
 
 
-register_caller('cimpl', CimplCisCaller)
+class CimplCisCallerCommand(CisCallerCommand):
+
+    name = 'cimpl'
+
+    def configure(self, parser):
+        super().configure(parser)
+
+        parser.add_argument('--pattern', required=True)
+
+        parser.add_argument('--genome', default='mm10')
+        parser.add_argument('--scales', default=(10000, 30000),
+                            nargs='+', type=int)  # yapf: disable
+        parser.add_argument('--chromosomes', default=None, nargs='+')
+        parser.add_argument('--alpha', default=0.05, type=float)
+        parser.add_argument('--lhc_method', default='exclude')
+        parser.add_argument('--iterations', default=1000, type=int)
+        parser.add_argument('--threads', default=1, type=int)
+        parser.add_argument(
+            '--min_strand_homogeneity', default=0.75, type=float)
+
+    def run(self, args):
+        # Read insertions.
+        insertions = list(Insertion.from_csv(args.insertions, sep='\t'))
+
+        # Call CIS sites.
+        caller = CimplCisCaller(
+            pattern=args.pattern,
+            genome=args.genome,
+            chromosomes=args.chromosomes,
+            alpha=args.alpha,
+            lhc_method=args.lhc_method,
+            iterations=args.iterations,
+            threads=args.threads,
+            min_strand_homogeneity=args.min_strand_homogeneity)
+
+        cis_sites, cis_mapping = caller.call(insertions=insertions)
+
+        # Annotate insertions and write outputs.
+        annotated_ins = self._annotate_insertions(insertions, cis_mapping)
+        self._write_outputs(annotated_ins, cis_sites, args)
 
 
 def expand_column(frame, col, delimiter):

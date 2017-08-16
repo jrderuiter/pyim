@@ -1,2 +1,2 @@
-from .base import get_callers, register_caller, CisCaller
+from .base import CisCaller, CisCallerCommand
 from .cimpl import CimplCisCaller

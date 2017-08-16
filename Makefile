@@ -1,4 +1,4 @@
-.PHONY: clean clean-test clean-pyc clean-build docs help
+.PHONY: clean clean-test clean-pyc clean-build docs help env
 .DEFAULT_GOAL := help
 define BROWSER_PYSCRIPT
 import os, webbrowser, sys
@@ -26,56 +26,60 @@ BROWSER := python -c "$$BROWSER_PYSCRIPT"
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
-clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
+clean: clean-build clean-pyc clean-test ## Remove all artefacts.
 
-clean-build: ## remove build artifacts
+clean-build: ## Remove build artefacts.
 	rm -fr build/
 	rm -fr dist/
 	rm -fr .eggs/
 	find . -name '*.egg-info' -exec rm -fr {} +
 	find . -name '*.egg' -exec rm -f {} +
 
-clean-pyc: ## remove Python file artifacts
+clean-pyc: ## Remove Python file artefacts.
 	find . -name '*.pyc' -exec rm -f {} +
 	find . -name '*.pyo' -exec rm -f {} +
 	find . -name '*~' -exec rm -f {} +
 	find . -name '__pycache__' -exec rm -fr {} +
 
-clean-test: ## remove test and coverage artifacts
+clean-test: ## Remove test and coverage artefacts.
 	rm -fr .tox/
 	rm -f .coverage
 	rm -fr htmlcov/
 
-lint: ## check style with flake8
-	flake8 pyim tests
+env: ## Create development environment.
+	conda env create --file environment.yml
+	pip install -e .
 
-test: ## run tests quickly with the default Python
+lint: ## Check style with pylint.
+	pylint src tests
+
+test: ## Run tests quickly with the default Python
 	py.test
 
-coverage: ## check code coverage quickly with the default Python
+coverage: ## Check code coverage quickly with the default Python.
 	coverage run --source pyim py.test
 
 		coverage report -m
 		coverage html
 		$(BROWSER) htmlcov/index.html
 
-docs: ## generate Sphinx HTML documentation, including API docs
+docs: ## Generate Sphinx HTML documentation, including API docs.
 	rm -rf docs/_build
 	sphinx-autobuild docs docs/_build
 
-release: clean ## package and upload a release
+release: clean ## Package and upload a release.
 	python setup.py sdist upload
 	python setup.py bdist_wheel upload
 
-dist: clean ## builds source and wheel package
+dist: clean ## Builds source and wheel package.
 	python setup.py sdist
 	python setup.py bdist_wheel
 	ls -l dist
 
-install: clean ## install the package to the active Python's site-packages
+install: clean ## Install the package to the active Python's site-packages.
 	python setup.py install
 
-gh-pages:
+gh-pages: ## Deploy documentation on github-pages.
 	git checkout gh-pages
 	find ./* -not -path '*/\.*' -prune -exec rm -r "{}" \;
 	git checkout develop docs Makefile src AUTHORS.rst CONTRIBUTING.rst HISTORY.rst README.rst

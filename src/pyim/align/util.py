@@ -1,81 +1,159 @@
 from collections import defaultdict
-import itertools
-import operator
+from itertools import groupby, chain
 
 import numpy as np
-import toolz
 
 from pyim.model import Insertion
-from pyim.util.frozendict import frozendict
+from pyim.vendor.frozendict import frozendict
 
 
-def extract_insertions(alignments,
-                       func,
-                       paired=False,
-                       group_func=None,
-                       merge_dist=None,
-                       min_mapq=None,
-                       min_support=1,
-                       logger=None):
-    """Extracts insertions from given alignments."""
+class AlignmentSummary(object):
+    """Alignment summary class."""
 
-    if logger is not None:
-        logger.info('Summarizing alignments')
-        logger.info('  %-18s: %s', 'Minimum mapq', min_mapq)
+    def __init__(self, values):
+        self._values = values
 
-    alignments = filter_alignments(alignments, min_mapq=min_mapq)
+    @property
+    def values(self):
+        """Returns alignment summary map."""
+        return self._values
 
-    if group_func is None:
-        summ_func = summarize_mates if paired else summarize_alignments
-        summary = summ_func(alignments, func=func)
+    @classmethod
+    def from_alignments(cls,
+                        alignments,
+                        position_func,
+                        sample_func,
+                        paired=False,
+                        min_mapq=30,
+                        primary=True):
+        """Constructs alignment summary from the given alignments."""
 
-        if logger is not None:
-            _log_insertions(logger, min_support, merge_dist)
+        # Optionally filter alignments.
+        if primary:
+            alignments = (aln for aln in alignments if not aln.is_secondary)
 
-        insertions = convert_summary_to_insertions(
-            summary, merge_dist=merge_dist, min_support=min_support)
-    else:
-        if paired:
-            raise NotImplementedError(
-                'Grouping is not yet supported for paired-end data')
-        else:
-            aln_summaries = summarize_alignments_by_group(
-                alignments, func, group_func=group_func)
+        if min_mapq is not None:
+            alignments = (aln for aln in alignments
+                          if aln.mapping_quality >= min_mapq)
 
-            if logger is not None:
-                _log_insertions(logger, min_support, merge_dist)
+        # Generate position/sample summaries.
+        iter_func = cls._iter_paired if paired else cls._iter_single
+        summaries = iter_func(alignments, position_func, sample_func)
 
-            insertion_grps = (
-                convert_summary_to_insertions(
-                    aln_summ,
-                    min_support=min_support,
-                    merge_dist=merge_dist,
-                    sample=barcode,
-                    id_fmt=barcode + '.INS_{}')
-                for barcode, aln_summ in aln_summaries.items()) # yapf: disable
+        # Track alignment positions per sample. Each entry tracks positions
+        # for a specific sample. Note that this dict contains two layers:
+        #
+        #   {'sample': {(ref, pos, strand): [linker_pos]}}
+        #
+        # The outer dict tracks positions for the given sample. The inner dict
+        # (sample dict) actually tracks transposon positions as
+        # (chrom, pos, strand) in the keys and linker positions (pos) in
+        # the values, allowing us to derive transposon locations from the keys
+        # and the number of 'unique ligation points' using the linker positions.
+        alignment_map = defaultdict(lambda: defaultdict(list))
+        for transposon_pos, linker_pos, sample in summaries:
+            alignment_map[sample][transposon_pos].append(linker_pos)
 
-        insertions = list(itertools.chain.from_iterable(insertion_grps))
+        return cls(dict(alignment_map))
 
-    return insertions
+    @staticmethod
+    def _iter_paired(alignments, position_func, sample_func):
+        for mate1, mate2 in iter_mates(alignments):
+            transposon_pos, linker_pos = position_func(mate1, mate2)
+            sample = sample_func(mate1, mate2)
+            yield transposon_pos, linker_pos, sample
 
+    @staticmethod
+    def _iter_single(alignments, position_func, sample_func):
+        for aln in alignments:
+            transposon_pos, linker_pos = position_func(aln)
+            sample = sample_func(aln)
+            yield transposon_pos, linker_pos, sample
 
-def _log_insertions(logger, min_support, merge_dist):
-    logger.info('Converting to insertions')
-    logger.info('  %-18s: %d', 'Minimum support', min_support)
-    logger.info('  %-18s: %s', 'Merge distance', merge_dist)
+    def merge_within_distance(self, max_dist):
+        """Merges summary values that are within given max dist."""
 
+        merged_values = {}
 
-def filter_alignments(alignments, only_primary=True, min_mapq=None):
-    """Filters alignments on mapping quality, etc."""
+        for sample, values in self._values.items():
+            grouped = self._group_within_distance(values, max_dist=max_dist)
+            new_values = dict(
+                self._merge_sample_keys(grp, values) for grp in grouped)
+            merged_values[sample] = new_values
 
-    if only_primary:
-        alignments = (aln for aln in alignments if not aln.is_secondary)
+        return self.__class__(merged_values)
 
-    if min_mapq is not None:
-        alignments = (aln for aln in alignments
-                      if aln.mapping_quality >= min_mapq)
+    @classmethod
+    def _group_within_distance(cls, sample_keys, max_dist):
+        """Groups summary position keys that are within max dist."""
 
-    yield from alignments
+        # First, we sort by position and group by reference/strand.
+        sorted_keys = sorted(sample_keys, key=lambda t: (t[2], t[0], t[1]))
+        grouped_ref = groupby(sorted_keys, lambda t: (t[2], t[0]))
+
+        # Then we identify and yield subgroups that are within max distance.
+        grouped_pos = (cls._group_by_position(grp, max_dist=max_dist)
+                       for _, grp in grouped_ref)  # yapf: disable
+
+        yield from chain.from_iterable(grouped_pos)
+
+    @staticmethod
+    def _group_by_position(sample_keys, max_dist):
+        sample_keys = iter(sample_keys)
+
+        curr_group = [next(sample_keys)]
+        prev_pos = curr_group[0][1]
+
+        for key in sample_keys:
+            if (key[1] - prev_pos) > max_dist:
+                yield curr_group
+                curr_group = [key]
+            else:
+                curr_group.append(key)
+
+        yield curr_group
+
+    @staticmethod
+    def _merge_sample_keys(key_group, sample_values):
+        """Merges given summary position keys into a single entry."""
+
+        # Get ref/strand.
+        ref, _, strand = key_group[0]
+
+        # Calculate (weighted) average position.
+        grp_pos, grp_size = zip(*((k[1], len(sample_values[k]))
+                                  for k in key_group))
+        position = int(round(np.average(grp_pos, weights=grp_size)))
+
+        # Determine new key and new entries.
+        merged_key = (ref, position, strand)
+
+        grp_values = (sample_values[key] for key in key_group)
+        merged_value = list(chain.from_iterable(grp_values))
+
+        return merged_key, merged_value
+
+    def to_insertions(self, id_fmt='{sample}.INS_{num}', min_support=0):
+        """Converts alignment map to a list of insertions."""
+
+        for sample, sample_values in self._values.items():
+            for i, (key, ends) in enumerate(sample_values.items()):
+                ref, pos, strand = key
+                support = len(set(ends))
+
+                if support >= min_support:
+                    metadata = frozendict(
+                        depth=len(ends), depth_unique=support)
+
+                    yield Insertion(
+                        id=id_fmt.format(
+                            sample=sample, num=i),
+                        sample=sample,
+                        chromosome=ref,
+                        position=pos,
+                        strand=strand,
+                        support=metadata['depth_unique'],
+                        metadata=metadata)
 
 
 def iter_mates(alignments):
@@ -96,178 +174,3 @@ def iter_mates(alignments):
                     yield aln, mate
                 else:
                     yield mate, aln
-
-
-def summarize_alignments(alignments, func):
-    """Summarizes alignments into a dict of chromosomal positions.
-
-    This function summarizes an iterable of alignments into a dict that
-    tracks the unique ends (ligation points) of the alignments for
-    different genomic positions. The genomic positions are encoded as a tuple
-    of (chromosome, position, strand) and are used as keys, whilst the
-    ligation points are tracked as a list of positions.
-
-    This dict is an intermediate used by other functions to derive insertions.
-
-    Parameters
-    ----------
-    alignments : iterable[pysam.AlignedSegment]
-        Alignments to summarize. May be prefiltered (on mapping quality
-        for example), as this function does not perform any filtering itself.
-    func : Function
-        Function that takes an alignment and returns a Tuple containing
-        (a) the location of the breakpoint with the transposon and (b) the
-        position of the breakpoint with the linker (or the end of the read
-        if no linkeris used). The former should be returned as a tuple of
-        (chromosome, position, strand), whereas the latter should only be
-        a position.
-
-    Returns
-    -------
-    dict[(str, int, int), list[int]]
-        Returns a dictionary mapping genomic positions, encoded as a
-        (chromosome, position, strand) tuple to ligation points.
-
-    """
-
-    alignment_map = defaultdict(list)
-
-    for aln in alignments:
-        transposon_position, linker_position = func(aln)
-        alignment_map[transposon_position].append(linker_position)
-
-    return dict(alignment_map)
-
-
-def summarize_mates(alignments, func):
-    """Summarizes mate pairs into a dict of chromosomal positions."""
-
-    alignment_map = defaultdict(list)
-
-    for mate1, mate2 in iter_mates(alignments):
-        transposon_position, linker_position = func(mate1, mate2)
-        alignment_map[transposon_position].append(linker_position)
-
-    return dict(alignment_map)
-
-
-def summarize_alignments_by_group(alignments, func, group_func):
-    """Summarizes groups of alignments into a dict of chromosomal positions."""
-
-    # Take subgroups of alignments into account. This allows us to make
-    # arbitrary subgroups of alignment summaries, for example by grouping
-    # reads by sample barcodes.
-
-    alignment_map = defaultdict(lambda: defaultdict(list))
-
-    for aln in alignments:
-        transposon_position, linker_position = func(aln)
-        group = group_func(aln)
-
-        if group is not None:
-            alignment_map[group][transposon_position].append(linker_position)
-
-    return {k: dict(v) for k, v in alignment_map.items()}
-
-
-def merge_summary_within_distance(aln_summary, max_distance=10):
-    """Merges alignment map entries that are within max_dist of each other."""
-
-    grouped_keys = _groupby_position(aln_summary.keys(), max_distance)
-
-    merged = dict(
-        _merge_entries(aln_summary, key_grp) for key_grp in grouped_keys)
-
-    return merged
-
-
-def _groupby_position(alignment_keys, max_distance=10):
-    """Groups alignment keys that are in close proximity for merging."""
-
-    # First we sort by position and group by reference/strand.
-    sorted_keys = sorted(alignment_keys, key=lambda t: (t[2], t[0], t[1]))
-    grouped_keys = itertools.groupby(sorted_keys, lambda t: (t[2], t[0]))
-
-    # Then we group the (position sorted) groups that are close together.
-    grouped_pos = itertools.chain.from_iterable(
-        _groupby_position_gen(
-            v, max_distance=max_distance) for _, v in grouped_keys)
-
-    return grouped_pos
-
-
-def _groupby_position_gen(key_group, max_distance):
-    key_iter = iter(key_group)
-
-    prev = next(key_iter)
-    curr_group = [prev]
-
-    for key in key_iter:
-        if (key[1] - prev[1]) <= max_distance:
-            # Continue group.
-            curr_group.append(key)
-        else:
-            # Start new group.
-            yield curr_group
-            curr_group = [key]
-
-    yield curr_group
-
-
-def _merge_entries(alignment_map, keys):
-    # Calculate (weighted) average position.
-    grp_pos, grp_size = zip(*((k[1], len(alignment_map[k])) for k in keys))
-    pos = int(round(np.average(grp_pos, weights=grp_size)))
-
-    # Generate new key/value.
-    ref = keys[0][0]
-    strand = keys[0][2]
-
-    new_key = (ref, pos, strand)
-    new_values = list(
-        itertools.chain.from_iterable(alignment_map[k] for k in keys))
-
-    return new_key, new_values
-
-
-def convert_summary_to_insertions(aln_summary,
-                                  min_support=1,
-                                  merge_dist=None,
-                                  id_fmt='INS_{}',
-                                  sort=True,
-                                  **kwargs):
-    """Converts an alignment map to a list of Insertions."""
-
-    # Optionally merge insertions within x distance.
-    if merge_dist is not None:
-        aln_summary = merge_summary_within_distance(
-            aln_summary, max_distance=merge_dist)
-
-    # Convert to insertions.
-    insertions = (_to_insertion(ref, pos, strand, ends, id_=None, **kwargs)
-                  for i, ((ref, pos, strand), ends)
-                  in enumerate(aln_summary.items())) # yapf: disable
-
-    # Filter for support.
-    insertions = (ins for ins in insertions if ins.support >= min_support)
-
-    if sort:
-        insertions = sorted(insertions, key=lambda ins: -ins.support)
-
-    # Add ids.
-    insertions = (ins._replace(id=id_fmt.format(i + 1))
-                  for i, ins in enumerate(insertions))
-
-    return list(insertions)
-
-
-def _to_insertion(ref, pos, strand, ends, id_=None, **kwargs):
-    metadata = toolz.merge({'depth': len(ends),
-                            'depth_unique': len(set(ends))}, kwargs)
-    return Insertion(
-        id=id_,
-        chromosome=ref,
-        position=pos,
-        strand=strand,
-        support=metadata['depth_unique'],
-        metadata=frozendict(metadata))

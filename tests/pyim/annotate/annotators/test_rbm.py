@@ -1,13 +1,17 @@
 import pytest
 
-from pyim.annotate.annotators.rbm import RbmAnnotator, RbmCisAnnotator
+from pyim.annotate.annotators.rbm import RbmAnnotator
 
 # pylint: disable=redefined-outer-name
 
 
-class TestWindowAnnotator(object):
-    def test_basic(self, insertions, gtf_path):
-        annotator = RbmAnnotator(gtf_path, preset='SB', verbose=False)
+class TestRbmAnnotator(object):
+    """Unit tests for the RbmAnnotator."""
+
+    def test_basic(self, insertions, genes):
+        """Tests a simple example."""
+
+        annotator = RbmAnnotator(genes, preset='SB')
         annotated = list(annotator.annotate(insertions))
 
         metadata1 = annotated[0].metadata
@@ -24,16 +28,11 @@ class TestWindowAnnotator(object):
 
         assert 'gene_name' not in annotated[2].metadata
 
+    def test_select_closest(self, insertions, genes):
+        """Test with selection for closest gene."""
 
-class TestWindowCisAnnotator(object):
-    def test_basic(self, cis_insertions, cis_sites, gtf_path):
-        annotator = RbmCisAnnotator(
-            gtf_path, preset='SB', cis_sites=cis_sites, verbose=False)
+        annotator = RbmAnnotator(genes, preset='SB', closest=True)
+        annotated = list(annotator.annotate(insertions))
 
-        annotated = {ins.id: ins for ins in annotator.annotate(cis_insertions)}
-
-        assert annotated['INS1'].metadata['cis_id'] == 'CIS1'
-        assert annotated['INS1'].metadata['gene_name'] == 'Trp53bp2'
-
-        assert annotated['INS2'].metadata['cis_id'] == 'CIS2'
-        assert 'gene_name' not in annotated['INS2'].metadata
+        assert len(annotated) == 3
+        assert annotated[0].metadata['gene_name'] == 'Trp53bp2'

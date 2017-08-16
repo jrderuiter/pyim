@@ -1,7 +1,7 @@
 import itertools
 import operator
 
-from pyim.util.frozendict import frozendict
+from pyim.vendor.frozendict import frozendict
 import numpy as np
 import toolz
 

@@ -1,11 +1,12 @@
 """Module containing model classes for fusions and insertions."""
 
-import collections
+from collections import namedtuple
 
-from pyim.util.frozendict import frozendict
 import numpy as np
 import pandas as pd
 import toolz
+
+from pyim.vendor.frozendict import frozendict
 
 
 class MetadataFrameMixin(object):
@@ -118,9 +119,9 @@ class MetadataFrameMixin(object):
         df.to_csv(str(file_path), index=index, **kwargs)
 
 
-_Insertion = collections.namedtuple('Insertion',
-                                    ['id', 'chromosome', 'position', 'strand',
-                                     'support', 'metadata'])
+_Insertion = namedtuple('Insertion', [
+    'id', 'chromosome', 'position', 'strand', 'support', 'sample', 'metadata'
+])
 
 
 class Insertion(MetadataFrameMixin, _Insertion):
@@ -131,8 +132,8 @@ class Insertion(MetadataFrameMixin, _Insertion):
     _dtypes = {'chromosome': str}
 
 
-_CisSite = collections.namedtuple(
-    'CisSite', ['id', 'chromosome', 'position', 'strand', 'metadata'])
+_CisSite = namedtuple('CisSite',
+                      ['id', 'chromosome', 'position', 'strand', 'metadata'])
 
 
 class CisSite(MetadataFrameMixin, _CisSite):

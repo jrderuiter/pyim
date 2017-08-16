@@ -1,45 +1,60 @@
 import itertools
-from pathlib import Path
 
-from intervaltree import IntervalTree
 import numpy as np
 
-from pyim.util.tabix import GtfFile
+from pyim.vendor.frozendict import frozendict
 
 
-def build_interval_trees(reference_gtf):
-    """Builds an interval tree of genes for each chromosome in gtf."""
+def select_closest(insertion, genes):
+    """Filters potential hits for genes closest to the insertion."""
 
-    if isinstance(reference_gtf, (str, Path)):
-        reference_gtf = GtfFile(reference_gtf)
+    if len(genes) == 0:
+        return genes
 
-    # Only select gene features for now.
-    genes = reference_gtf.fetch(filters={'feature': 'gene'})
+    distances = np.array([_calc_distance(insertion, gene)
+                          for gene in genes.itertuples()])  # yapf: disable
+    abs_distances = np.abs(distances)
 
-    # Note, below code assumes that genes are ordered by contig.
-
-    trees = {}
-    for contig, grp in itertools.groupby(genes, lambda r: r['contig']):
-        # Build a tree for each individual chromosome.
-        intervals = ((g['start'], g['end'], dict(g)) for g in grp
-                     if g['end'] > g['start'])  # Avoid null intervals.
-        trees[contig] = IntervalTree.from_tuples(intervals)
-
-    return trees
+    return genes.loc[abs_distances == abs_distances.min()]
 
 
-def numeric_strand(strand):
-    """Converts strand to its numeric (integer) representation."""
+def filter_blacklist(genes, blacklist, field='gene_id'):
+    """Filters potential hits against given blacklist."""
+    return genes.loc[~genes[field].isin(blacklist)]
 
-    if isinstance(strand, int):
-        return strand
-    elif isinstance(strand, (float, np.generic)):
-        return int(strand)
-    elif isinstance(strand, str):
-        if strand == '+':
-            return 1
-        elif strand == '-':
-            return -1
 
-    raise ValueError('Unknown value {} for strand (type: {})'
-                     .format(strand, type(strand)))
+def annotate_insertion(insertion, hits):
+    """Annotates insertion with given gene hits."""
+
+    if len(hits) > 0:
+        # Annotate insertion with overlapping genes.
+        for row in hits.itertuples():
+            gene_metadata = {
+                'gene_id': row.gene_id,
+                'gene_name': row.gene_name,
+                'gene_distance': _calc_distance(insertion, row),
+                'gene_orientation': 'sense' if row.strand \
+                    == insertion.strand else 'antisense'
+            }
+
+            metadata = {**insertion.metadata,
+                        **gene_metadata}  # yapf: disable
+            yield insertion._replace(metadata=frozendict(metadata))
+    else:
+        # In case of no overlap, return original insertion.
+        yield insertion
+
+
+def _calc_distance(insertion, gene):
+    assert not isinstance(gene.strand, str)
+
+    if gene.start <= insertion.position < gene.end:
+        return 0
+    elif insertion.position > gene.end:
+        dist = insertion.position - gene.end
+    else:
+        dist = insertion.position - gene.start
+
+    dist *= gene.strand
+
+    return dist
