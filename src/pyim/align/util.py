@@ -110,6 +110,7 @@ class AlignmentSummary(object):
                 curr_group = [key]
             else:
                 curr_group.append(key)
+            prev_pos = key[1]
 
         yield curr_group
 
@@ -146,8 +147,7 @@ class AlignmentSummary(object):
                         depth=len(ends), depth_unique=support)
 
                     yield Insertion(
-                        id=id_fmt.format(
-                            sample=sample, num=i),
+                        id=id_fmt.format(sample=sample, num=i),
                         sample=sample,
                         chromosome=ref,
                         position=pos,
