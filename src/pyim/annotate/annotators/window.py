@@ -2,8 +2,9 @@ from collections import namedtuple
 from itertools import chain
 from pathlib import Path
 
-from genopandas import GenomicDataFrame
 import pandas as pd
+
+from pyim.vendor.genopandas import GenomicDataFrame
 
 from .base import Annotator, AnnotatorCommand, CisAnnotator
 from ..util import filter_blacklist, select_closest, annotate_insertion
@@ -75,8 +76,8 @@ class WindowAnnotator(Annotator):
             if region.strand is not None:
                 overlap = overlap.loc[overlap['strand'] == region.strand]
         except KeyError:
-            overlap = GenomicDataFrame(pd.DataFrame().reindex(
-                columns=self._genes.columns))
+            overlap = GenomicDataFrame(
+                pd.DataFrame().reindex(columns=self._genes.columns))
 
         return overlap
 
@@ -128,9 +129,9 @@ class Window(object):
             strict_right=strict_right)
 
 
-Region = namedtuple(
-    'Region',
-    ['chromosome', 'start', 'end', 'strand', 'strict_left', 'strict_right'])
+Region = namedtuple('Region', [
+    'chromosome', 'start', 'end', 'strand', 'strict_left', 'strict_right'
+])
 
 
 class WindowAnnotatorCommand(AnnotatorCommand):

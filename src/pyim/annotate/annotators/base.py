@@ -3,12 +3,12 @@ from itertools import groupby, chain
 import operator
 from pathlib import Path
 
-from genopandas import GenomicDataFrame
 import numpy as np
 import pandas as pd
 
 from pyim.main import Command
 from pyim.model import Insertion, CisSite
+from pyim.vendor.genopandas import GenomicDataFrame
 
 from ..util import annotate_insertion
 
@@ -78,9 +78,8 @@ class CisAnnotator(Annotator):
         cis_gene_mapping = self._extract_gene_mapping(annotated_sites)
 
         # Annotate insertions.
-        annotated = chain.from_iterable(
-            (self._annotate_insertion(ins, cis_gene_mapping)
-             for ins in insertions))
+        annotated = chain.from_iterable((self._annotate_insertion(
+            ins, cis_gene_mapping) for ins in insertions))
 
         yield from annotated
 
