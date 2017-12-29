@@ -10,7 +10,7 @@ import pysam
 from pyim.external.cutadapt import cutadapt, cutadapt_summary
 from pyim.external.bowtie2 import bowtie2
 from pyim.external.util import flatten_arguments
-from pyim.model import Insertion
+from pyim.model import Insertion, InsertionSet
 from pyim.util.path import shorten_path, extract_suffix
 
 from .base import Pipeline, register_pipeline
@@ -570,8 +570,8 @@ class MultiplexedShearSplinkPipeline(ShearSplinkPipeline):
         # Write insertions to output file.
         insertion_path = output_dir / 'insertions.txt'
 
-        ins_frame = Insertion.to_frame(insertions)
-        ins_frame.to_csv(str(insertion_path), sep='\t', index=False)
+        insertion_set = InsertionSet.from_tuples(insertions)
+        insertion_set.to_csv(str(insertion_path), sep='\t', index=False)
 
     def _get_barcode_mapping(self, read_path):
         # Read barcode sequences.
@@ -594,8 +594,10 @@ def _extract_barcode_mapping(reads, barcodes, barcode_mapping=None):
     barcode_dict = {bc.name: bc.sequence for bc in barcodes}
 
     if barcode_mapping is not None:
-        barcode_dict = {sample: barcode_dict[barcode]
-                        for barcode, sample in barcode_mapping.items()}
+        barcode_dict = {
+            sample: barcode_dict[barcode]
+            for barcode, sample in barcode_mapping.items()
+        }
 
     # Build mapping.
     mapping = {}

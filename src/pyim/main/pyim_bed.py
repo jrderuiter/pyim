@@ -3,59 +3,23 @@
 Converts an insertion dataframe to the BED file format."""
 
 import argparse
-from collections import OrderedDict
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-
-from pyim.model import Insertion
-
-RED = '255,0,0'
-BLUE = '0,0,255'
-GRAY = '60,60,60'
+from pyim.model import InsertionSet
 
 
 def main():
-    """Main function for pyim-cis."""
+    """Main function for pyim-bed."""
 
     args = parse_args()
 
-    # Read insertions.
-    insertion_df = Insertion.from_csv(args.insertions, sep='\t', as_frame=True)
-
-    # Drop any columns if needed.
-    if args.drop_columns is not None:
-        insertion_df = insertion_df.drop(args.drop_columns, axis=1)
-        insertion_df = insertion_df.drop_duplicates()
-
-    # Convert to BED frame.
-    start = (insertion_df['position'] - (args.width // 2)).astype(int)
-    end = (insertion_df['position'] + (args.width // 2)).astype(int)
-
-    strand = insertion_df['strand'].map({1: '+', -1: '-', np.nan: '.'})
-    color = strand.map({'+': BLUE, '-': RED, '.': GRAY})
-
-    bed_frame = pd.DataFrame(
-        OrderedDict([
-            ('chrom', insertion_df['chromosome']),
-            ('chromStart', start),
-            ('chromEnd', end),
-            ('name', insertion_df['id']),
-            ('score', insertion_df['support']),
-            ('strand', strand),
-            ('thickStart', start),
-            ('thickEnd', end),
-            ('itemRgb', color)
-        ])
-    )  # yapf: disable
-
-    # Write output.
-    bed_frame.to_csv(str(args.output), sep='\t', index=False, header=False)
+    insertions = InsertionSet.from_csv(args.insertions, sep='\t')
+    insertions.to_bed(
+        args.output, width=args.width, drop_columns=args.drop_columns)
 
 
 def parse_args():
-    """Parses arguments for pyim-cis."""
+    """Parses arguments for pyim-bed."""
 
     parser = argparse.ArgumentParser(prog='pyim-bed')
 

@@ -99,17 +99,18 @@ class AlignmentSummary(object):
 
     @staticmethod
     def _group_by_position(sample_keys, max_dist):
-        sample_keys = iter(sample_keys)
+        sample_keys = list(sample_keys)
 
-        curr_group = [next(sample_keys)]
+        curr_group = [sample_keys[0]]
         prev_pos = curr_group[0][1]
 
-        for key in sample_keys:
+        for key in sample_keys[1:]:
             if (key[1] - prev_pos) > max_dist:
                 yield curr_group
                 curr_group = [key]
             else:
                 curr_group.append(key)
+            prev_pos = key[1]
 
         yield curr_group
 
@@ -146,8 +147,7 @@ class AlignmentSummary(object):
                         depth=len(ends), depth_unique=support)
 
                     yield Insertion(
-                        id=id_fmt.format(
-                            sample=sample, num=i),
+                        id=id_fmt.format(sample=sample, num=i),
                         sample=sample,
                         chromosome=ref,
                         position=pos,

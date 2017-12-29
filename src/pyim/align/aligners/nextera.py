@@ -9,7 +9,7 @@ import toolz
 from pyim.external.bowtie2 import bowtie2
 from pyim.external.cutadapt import cutadapt, cutadapt_summary
 from pyim.external.util import flatten_arguments
-from pyim.model import Insertion
+from pyim.model import InsertionSet
 from pyim.util.path import WorkDirectory, shorten_path, extract_suffix
 
 from .base import Aligner, PairedEndCommand
@@ -99,11 +99,10 @@ class NexteraAligner(Aligner):
     def trim(self, read_paths, output_paths, work_dir=None):
         """Trims reads to remove transposon/nextera sequences."""
 
-        # if logger is not None:
-        #     logger.info('Extracting genomic sequences')
-        #     logger.info('  %-18s: %s', 'Transposon',
-        #                 shorten_path(self._transposon_path))
-        #     logger.info('  %-18s: %s', 'Minimum length', self._min_length)
+        self._logger.info('Extracting genomic sequences')
+        self._logger.info('  %-18s: %s', 'Transposon',
+                          shorten_path(self._transposon_path))
+        self._logger.info('  %-18s: %s', 'Minimum length', self._min_length)
 
         self._check_read_paths(read_paths)
         suffix = extract_suffix(read_paths[0])
@@ -178,10 +177,11 @@ class NexteraAligner(Aligner):
         options = toolz.merge(self._bowtie_options, extra_opts)
 
         # Align reads to genome.
-        # logger.info('Aligning to reference')
-        # logger.info('  %-18s: %s', 'Reference', shorten_path(self._index_path))
-        # logger.info('  %-18s: %s', 'Bowtie options',
-        #             flatten_arguments(options))
+        self._logger.info('Aligning to reference')
+        self._logger.info('  %-18s: %s', 'Reference',
+                          shorten_path(self._index_path))
+        self._logger.info('  %-18s: %s', 'Bowtie options',
+                          flatten_arguments(options))
 
         bowtie2(
             read_paths=[read_paths[0]],
@@ -246,7 +246,7 @@ class NexteraAligner(Aligner):
             self.align(trimmed_paths, output_path=alignment_path)
 
             # Extract insertions.
-            insertions = list(self.extract(alignment_path))
+            insertions = InsertionSet.from_tuples(self.extract(alignment_path))
 
         return insertions
 
@@ -293,4 +293,4 @@ class NexteraCommand(PairedEndCommand):
         insertions = aligner.run(args.reads, work_dir=args.work_dir)
 
         args.output.parent.mkdir(exist_ok=True, parents=True)
-        Insertion.to_csv(args.output, insertions, sep='\t', index=False)
+        insertions.to_csv(args.output, sep='\t', index=False)

@@ -12,7 +12,7 @@ with open('HISTORY.rst') as history_file:
 REQUIREMENTS = [
     'pyfaidx>=0.4.8.1', 'intervaltree>=2.1', 'tqdm>=4.7', 'toolz>=0.8',
     'rpy2>=2.8.2', 'numpy', 'pandas>=0.18', 'pysam>=0.9', 'natsort',
-    'cutadapt >=1.8'
+    'cutadapt >=1.8', 'matplotlib', 'seaborn'
 ]
 
 EXTRAS_REQUIRE = {
