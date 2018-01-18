@@ -1,1 +1,1 @@
-from .callers import CisCaller, CimplCisCaller, CisCallerCommand
+from .callers import CisCaller, CimplCisCaller

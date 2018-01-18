@@ -14,13 +14,14 @@ dependencies:
   - toolz >=0.8.0
   - tqdm
   - intervaltree
-  - cutadapt =1.12
+  - cutadapt =1.15
   - bowtie2 =2.3.0
 
   # R dependencies
-  - r-base =3.3.1
-  - r-cimpl
-  - rpy2 >=2.8.2
+  - conda-forge::r-base
+  - conda-forge::rpy2 >=2.8.2
+  - bioconda::r-cimpl
+  - bioconda::bioconductor-bsgenome.mmusculus.ucsc.mm10
 
   # Dev dependencies
   - pytest

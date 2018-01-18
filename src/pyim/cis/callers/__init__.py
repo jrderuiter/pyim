@@ -1,2 +1,2 @@
-from .base import CisCaller, CisCallerCommand
+from .base import CisCaller
 from .cimpl import CimplCisCaller

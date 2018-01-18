@@ -4,8 +4,6 @@ pipelines."""
 import abc
 from pathlib import Path
 
-from pyim.main import Command
-
 
 class Aligner(abc.ABC):
     """Base pipeline class.
@@ -30,7 +28,7 @@ class Aligner(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def run(self, read_paths, work_dir=None):
+    def extract_insertions(self, read_paths, output_prefix=None):
         """Runs the pipeline, producing a table of identified insertions.
 
         Parameters
@@ -46,24 +44,3 @@ class Aligner(abc.ABC):
             sequencing data.
 
         """
-
-
-class AlignerCommand(Command):
-    """Base aligner command."""
-    pass
-
-
-class SingleEndCommand(AlignerCommand):
-    """Base command class for single-end aligners."""
-
-    def configure(self, parser):
-        parser.add_argument('--reads', required=True, type=Path)
-        parser.add_argument('--output', required=True, type=Path)
-
-
-class PairedEndCommand(AlignerCommand):
-    """Base command class for paired-end aligners."""
-
-    def configure(self, parser):
-        parser.add_argument('--reads', nargs=2, required=True)
-        parser.add_argument('--output', required=True, type=Path)

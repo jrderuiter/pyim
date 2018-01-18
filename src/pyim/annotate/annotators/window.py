@@ -1,82 +1,62 @@
 from collections import namedtuple
-from itertools import chain
-from pathlib import Path
 
-from genopandas import GenomicDataFrame
 import pandas as pd
 
-from .base import Annotator, AnnotatorCommand, CisAnnotator
-from ..util import filter_blacklist, select_closest, annotate_insertion
+from .base import Annotator
 
 
 class WindowAnnotator(Annotator):
     """Window annotator class."""
 
-    def __init__(self, genes, windows, closest=False, blacklist=None):
+    def __init__(self, windows):
         super().__init__()
-
         self._windows = windows
-        self._genes = genes
-
-        self._closest = closest
-        self._blacklist = blacklist
 
     @classmethod
-    def from_window_size(cls, genes, window_size, **kwargs):
+    def from_window_size(cls, window_size, **kwargs):
         """Creates instance using given window size."""
 
         window = Window(
             upstream=window_size,
             downstream=window_size,
             strand=None,
-            name=None,
+            name='default',
             strict_left=False,
             strict_right=False)
 
-        return cls(genes=genes, windows=[window], **kwargs)
+        return cls(windows=[window], **kwargs)
 
-    def annotate(self, insertions):
-        yield from chain.from_iterable((self._annotate_insertion(ins)
-                                        for ins in insertions))
+    def match(self, insertions, genes):
+        def _match_gen(insertions):
+            for row in insertions.itertuples():
+                for window in self._windows:
+                    region = window.apply(row.chromosome, row.position,
+                                          row.strand)
+                    gene_ids = self._get_overlap(genes, region)
 
-    def _annotate_insertion(self, insertion):
-        # Identify overlapping features.
-        hits = []
-        for window in self._windows:
-            region = window.apply(insertion.chromosome, insertion.position,
-                                  insertion.strand)
+                    for gene_id in gene_ids:
+                        yield (row.id, gene_id, window.name)
 
-            overlap = self._get_genes(region)
-            overlap = overlap.assign(window=window.name)
+        return pd.DataFrame.from_records(
+            _match_gen(insertions), columns=['id', 'gene_id', 'window'])
 
-            hits.append(overlap)
-
-        hits = pd.concat(hits, axis=0, ignore_index=True)
-
-        # Filter for closest/blacklist.
-        if self._closest:
-            hits = select_closest(insertion, hits)
-
-        if self._blacklist is not None:
-            hits = filter_blacklist(hits, self._blacklist)
-
-        # Annotate insertion with identified hits.
-        yield from annotate_insertion(insertion, hits)
-
-    def _get_genes(self, region):
+    def _get_overlap(self, genes, region):
         try:
-            overlap = self._genes.gi.search(
-                region.chromosome,
+            overlap = genes.gloc.search(
+                str(region.chromosome),
                 region.start,
                 region.end,
                 strict_left=region.strict_left,
                 strict_right=region.strict_right)
 
             if region.strand is not None:
-                overlap = overlap.loc[overlap['strand'] == region.strand]
+                gene_strand = overlap['strand'].map({'+': 1, '-': -1})
+                overlap = overlap.loc[gene_strand == region.strand]
+
+            return overlap['gene_id']
         except KeyError:
-            overlap = GenomicDataFrame(pd.DataFrame().reindex(
-                columns=self._genes.columns))
+            # TODO: print warning?
+            return []
 
         return overlap
 
@@ -128,52 +108,6 @@ class Window(object):
             strict_right=strict_right)
 
 
-Region = namedtuple(
-    'Region',
-    ['chromosome', 'start', 'end', 'strand', 'strict_left', 'strict_right'])
-
-
-class WindowAnnotatorCommand(AnnotatorCommand):
-    """WindowAnnotator command."""
-
-    name = 'window'
-
-    def configure(self, parser):
-        super().configure(parser)
-
-        # Required arguments.
-        parser.add_argument('--gtf', required=True, type=Path)
-
-        # Optional arguments.
-        parser.add_argument('--window_size', default=20000, type=int)
-
-        parser.add_argument('--closest', default=False, action='store_true')
-        parser.add_argument('--blacklist', nargs='+', default=None)
-
-    def run(self, args):
-        # Read insertions and genes.
-        insertions = self._read_insertions(args.insertions)
-        genes = self._read_genes_from_gtf(args.gtf)
-
-        # Setup annotator.
-        if args.cis_sites is not None:
-            cis_sites = list(self._read_cis_sites(args.cis_sites))
-
-            sub_annotator = WindowAnnotator.from_window_size(
-                genes=genes,
-                window_size=args.window_size,
-                closest=args.closest,
-                blacklist=args.blacklist)
-
-            annotator = CisAnnotator(
-                annotator=sub_annotator, genes=genes, cis_sites=cis_sites)
-        else:
-            annotator = WindowAnnotator.from_window_size(
-                genes=genes,
-                window_size=args.window_size,
-                closest=args.closest,
-                blacklist=args.blacklist)
-
-        # Annotate insertions and write output.
-        annotated = annotator.annotate(insertions)
-        self._write_output(args.output, insertions=annotated)
+Region = namedtuple('Region', [
+    'chromosome', 'start', 'end', 'strand', 'strict_left', 'strict_right'
+])

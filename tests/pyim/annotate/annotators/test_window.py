@@ -1,87 +1,169 @@
-from pyim.annotate.annotators.window import Window, WindowAnnotator
+from genopandas import GenomicDataFrame
+import pytest
 
-# pylint: disable=redefined-outer-name
+from pyim.annotate.annotators import window
+from pyim.model import InsertionSet
 
 
 class TestWindowAnnotator(object):
-    """Unit tests for annotation using the WindowAnnotator."""
+    """Tests for the WindowAnnotator class."""
 
-    def test_basic(self, insertions, genes):
-        """Test simple example of annotating three insertions.
+    @pytest.fixture
+    def insertions(self):
+        """Example set of insertions."""
+        file_path = pytest.helpers.data_path('tagmap/subset.txt')
+        return InsertionSet.from_csv(file_path, sep='\t')
 
-        The first two insertions should be annotated with Trp53bp2/Myh9
-        respectively. The third should not be annotated with any gene,
-        as this insertion occurs on a chromosome that does not contain
-        any genes.
+    @pytest.fixture(scope='module')
+    def genes(self):
+        """Example reference gene set."""
+        file_path = pytest.helpers.data_path('tagmap/reference.gtf.gz')
+        return GenomicDataFrame.from_gtf(
+            file_path, filter_=lambda rec: rec['feature'] == 'gene')
 
-        Note that this should NOT raise an error for the non-existing
-        chromosome.
+    def test_match(self, insertions, genes):
+        """Tests match method."""
+
+        # Annotate insertions.
+        annotator = window.WindowAnnotator.from_window_size(20000)
+        matches = annotator.match(insertions, genes)
+
+        assert list(matches.columns) == ['id', 'gene_id', 'window']
+
+        # Check gene annotations.
+        annotations = {
+            id_: set(grp['gene_id'])
+            for id_, grp in matches.groupby('id')
+        }
+
+        assert annotations == {
+            'test.INS_7': {'ENSMUSG00000019907'},
+            'test.INS_3': {'ENSMUSG00000030849'},
+            'test.INS_2': {'ENSMUSG00000031980', 'ENSMUSG00000031981'},
+            'test.INS_6':
+            {'ENSMUSG00000052426', 'ENSMUSG00000037762', 'ENSMUSG00000089835'},
+            'test.INS_1': {'ENSMUSG00000035168'},
+            'test.INS_4': {'ENSMUSG00000007880'},
+            'test.INS_5': {'ENSMUSG00000038679'}
+        }
+
+    def test_annotate(self, insertions, genes):
+        """Tests annotate method."""
+
+        # Annotate insertions.
+        annotator = window.WindowAnnotator.from_window_size(20000)
+        annotated = annotator.annotate(insertions, genes=genes)
+
+        # Check returned type.
+        assert isinstance(annotated, InsertionSet)
+
+        # Check gene annotations.
+        annotations = {
+            id_: set(grp['gene_id'])
+            for id_, grp in annotated.groupby('id')
+        }
+
+        assert annotations == {
+            'test.INS_7': {'ENSMUSG00000019907'},
+            'test.INS_3': {'ENSMUSG00000030849'},
+            'test.INS_2': {'ENSMUSG00000031980', 'ENSMUSG00000031981'},
+            'test.INS_6':
+            {'ENSMUSG00000052426', 'ENSMUSG00000037762', 'ENSMUSG00000089835'},
+            'test.INS_1': {'ENSMUSG00000035168'},
+            'test.INS_4': {'ENSMUSG00000007880'},
+            'test.INS_5': {'ENSMUSG00000038679'}
+        }
+
+        # Check a few values.
+        ann_ind = annotated.set_index(['id', 'gene_name'])
+
+        assert ann_ind.loc[('test.INS_2', 'Agt'), 'gene_distance'] == 13709
+        assert ann_ind.loc[('test.INS_2', 'Agt'), 'gene_orientation'] == 1
+
+        assert ann_ind.loc[('test.INS_2', 'Capn9'), 'gene_distance'] == 0
+        assert ann_ind.loc[('test.INS_2', 'Capn9'), 'gene_orientation'] == -1
+
+    def test_annotate_closest(self, insertions, genes):
+        """Tests annotate with closest == True."""
+
+        # Annotate insertions.
+        annotator = window.WindowAnnotator.from_window_size(20000)
+        annotated = annotator.annotate(insertions, genes=genes, closest=True)
+
+        # Check gene annotations.
+        annotations = {
+            id_: set(grp['gene_name'])
+            for id_, grp in annotated.groupby('id')
+        }
+
+        assert annotations == {
+            'test.INS_2': {'Capn9'},
+            'test.INS_5': {'Trps1'},
+            'test.INS_6': {'Slc16a9'},
+            'test.INS_7': {'Ppp1r12a'},
+            'test.INS_4': {'Arid1a'},
+            'test.INS_3': {'Fgfr2'},
+            'test.INS_1': {'Tanc1'}
+        }
+
+    def test_annotate_blacklist(self, insertions, genes):
+        """Tests annotate with blacklist."""
+
+        # Annotate insertions.
+        annotator = window.WindowAnnotator.from_window_size(20000)
+
+        annotated = annotator.annotate(
+            insertions,
+            genes=genes,
+            closest=False,
+            blacklist={'Slc16a9', 'Capn9', 'Trps1'},
+            blacklist_col='gene_name')
+
+        # Check gene annotations.
+        annotations = {
+            id_: set(grp['gene_name'])
+            for id_, grp in
+            annotated.dropna(subset=['gene_name'])
+                    .groupby('id')
+        }  # yapf: disable
+
+        assert annotations == {
+            'test.INS_2': {'Agt'},
+            'test.INS_6': {'Gm7097', 'Gm9877'},
+            'test.INS_7': {'Ppp1r12a'},
+            'test.INS_4': {'Arid1a'},
+            'test.INS_3': {'Fgfr2'},
+            'test.INS_1': {'Tanc1'}
+        }
+
+    def test_annotate_closest_blacklist(self, insertions, genes):
+        """Tests annotate with closest == True and blacklist.
+
+        Should drop INS_2 and INS_6 entirely, as blacklisting is
+        done after selecting for the closest gene.
         """
 
         # Annotate insertions.
-        annotator = WindowAnnotator.from_window_size(
-            genes=genes, window_size=20000)
-        annotated = list(annotator.annotate(insertions))
+        annotator = window.WindowAnnotator.from_window_size(20000)
 
-        # Verify annotations.
-        metadata1 = annotated[0].metadata
-        assert metadata1['gene_name'] == 'Trp53bp2'
-        assert metadata1['gene_id'] == 'ENSMUSG00000026510'
-        assert metadata1['gene_distance'] == -1000
-        assert metadata1['gene_orientation'] == 'sense'
+        annotated = annotator.annotate(
+            insertions,
+            genes=genes,
+            closest=True,
+            blacklist={'Slc16a9', 'Capn9', 'Trps1'},
+            blacklist_col='gene_name')
 
-        metadata2 = annotated[1].metadata
-        assert metadata2['gene_name'] == 'Myh9'
-        assert metadata2['gene_id'] == 'ENSMUSG00000022443'
-        assert metadata2['gene_distance'] == 2000
-        assert metadata2['gene_orientation'] == 'antisense'
+        # Check gene annotations.
+        annotations = {
+            id_: set(grp['gene_name'])
+            for id_, grp in
+            annotated.dropna(subset=['gene_name'])
+                    .groupby('id')
+        }  # yapf: disable
 
-        # Check that last insertion was not annotated.
-        assert 'gene_name' not in annotated[2].metadata
-
-    def test_small_window(self, insertions, genes):
-        """Test example with smaller window. Should not annotate Myh9."""
-
-        annotator = WindowAnnotator.from_window_size(genes, window_size=1500)
-        annotated = list(annotator.annotate(insertions))
-
-        assert annotated[0].metadata['gene_name'] == 'Trp53bp2'
-        assert 'gene_name' not in annotated[1].metadata
-        assert 'gene_name' not in annotated[2].metadata
-
-    def test_blacklist(self, insertions, genes):
-        """Test with blacklisted gene. Should not annotate Trp53bp2."""
-
-        annotator = WindowAnnotator.from_window_size(
-            genes, window_size=20000, blacklist={'ENSMUSG00000026510'})
-        annotated = list(annotator.annotate(insertions))
-
-        assert 'gene_name' not in annotated[0].metadata
-
-    def test_multiple(self, insertions, genes):
-        """Test with multiple gene annotations."""
-
-        annotator = WindowAnnotator.from_window_size(
-            genes, window_size=200000000)
-        annotated = list(annotator.annotate(insertions))
-
-        assert len(annotated) == 4
-
-        assert annotated[0].id == 'INS1'
-        assert annotated[1].id == 'INS1'
-
-        genes = {
-            annotated[0].metadata['gene_name'],
-            annotated[1].metadata['gene_name']
+        assert annotations == {
+            'test.INS_7': {'Ppp1r12a'},
+            'test.INS_4': {'Arid1a'},
+            'test.INS_3': {'Fgfr2'},
+            'test.INS_1': {'Tanc1'}
         }
-        assert genes == {'Ppp1r12b', 'Trp53bp2'}
-
-    def test_select_closest(self, insertions, genes):
-        """Test with selection for closest gene."""
-
-        annotator = WindowAnnotator.from_window_size(
-            genes, window_size=200000000, closest=True)
-        annotated = list(annotator.annotate(insertions))
-
-        assert len(annotated) == 3
-        assert annotated[0].metadata['gene_name'] == 'Trp53bp2'

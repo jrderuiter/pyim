@@ -1,12 +1,12 @@
 from collections import namedtuple, OrderedDict
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
+
+from pyim.util.pandas_ import DfWrapper
 
 
-class RecordSet(object):
+class RecordSet(DfWrapper):
     """Base class that provides functionality for serializing and
        deserializing namedtuple records into a DataFrame format.
 
@@ -15,7 +15,8 @@ class RecordSet(object):
     """
 
     def __init__(self, values: pd.DataFrame) -> None:
-        self._values = self._check_frame(values)
+        values = self._check_frame(values)
+        super().__init__(values)
 
     @classmethod
     def _check_frame(cls, values):
@@ -27,6 +28,20 @@ class RecordSet(object):
 
         return values.reindex(columns=fields)
 
+    def _constructor(self, values):
+        """Constructor that attempts to build new instance
+           from given values."""
+
+        if isinstance(values, pd.DataFrame):
+            try:
+                return self.__class__(values.copy())
+            except ValueError:
+                # Fallback to pd.DataFrame if instantation
+                # fails (typically due to missing columns).
+                return values.copy()
+
+        return values
+
     @classmethod
     def _tuple_class(cls):
         """Returns namedtuple class used to instantiate records."""
@@ -36,20 +51,6 @@ class RecordSet(object):
     def _tuple_fields(cls):
         """Returns the fields in the named tuple class."""
         return cls._tuple_class()._fields
-
-    @property
-    def values(self) -> pd.DataFrame:
-        """Internal DataFrame representation of records."""
-        return self._values
-
-    def __getitem__(self, item):
-        return self._values[item]
-
-    def __setitem__(self, idx, value):
-        self._values[idx] = value
-
-    def __len__(self):
-        return len(self._values)
 
     @classmethod
     def from_tuples(cls, tuples):
@@ -77,15 +78,6 @@ class RecordSet(object):
     def to_csv(self, file_path, **kwargs):
         """Writes the record set to a csv file using pandas' to_csv."""
         self._values.to_csv(file_path, **kwargs)
-
-    def groupby(self, by, **kwargs):
-        """Groups the set by values of the specified columns."""
-        for key, group in self._values.groupby(by, **kwargs):
-            yield key, self.__class__(group)
-
-    def query(self, expr, **kwargs):
-        """Queries the columns of the set with a boolean expression."""
-        return self.__class__(self._values.query(expr, **kwargs))
 
     @classmethod
     def concat(cls, record_sets):
@@ -167,13 +159,42 @@ Insertion = namedtuple('Insertion', [
 class InsertionSet(MetadataRecordSet):
     """Class that represents an insertion dataset."""
 
-    def __init__(self, values, gene_col='gene_name'):
+    def __init__(self, values, gene_col=None):
+        if gene_col is not None and gene_col not in values.columns:
+            raise ValueError('Unknown column {!r}'.format(gene_col))
+
         super().__init__(values)
-        self._gene_col = gene_col
+        self.__gene_col = gene_col
 
     @classmethod
     def _tuple_class(cls):
         return Insertion
+
+    @property
+    def _gene_col(self):
+        if self.__gene_col is None:
+            raise ValueError(
+                'No gene column was provided. The column can be '
+                'specified with the gene_col argument in the constructor.')
+        return self.__gene_col
+
+    @classmethod
+    def from_csv(cls, file_path, gene_col=None, **kwargs):
+        """Reads InsertionSet from a CSV file."""
+
+        # Enforce default dtypes.
+        dtypes = kwargs.get('dtype', {})
+        dtypes.update({'chromosome': str})
+        kwargs['dtype'] = dtypes
+
+        record_set = super().from_csv(file_path, **kwargs)
+        return cls(record_set.values, gene_col=gene_col)
+
+    @classmethod
+    def from_tuples(cls, tuples, gene_col=None):
+        """Builds a insetion set instance from the given tuples."""
+        record_set = super().from_tuples(tuples)
+        return cls(record_set.values, gene_col=gene_col)
 
     @property
     def samples(self):
@@ -198,16 +219,16 @@ class InsertionSet(MetadataRecordSet):
 
         return self.__class__(values.copy())
 
-    def rename(self, name_map, drop=False):
+    def rename_samples(self, mapping, drop=False):
         """Renames samples using the given mapping."""
 
         if drop:
-            mask = self._values['sample'].isin(name_map)
+            mask = self._values['sample'].isin(mapping)
             values = self._values.loc[mask].copy()
         else:
             values = self._values.copy()
 
-        values['sample'] = values['sample'].map(name_map)
+        values['sample'] = values['sample'].map(mapping)
 
         return self.__class__(values)
 
@@ -250,7 +271,7 @@ class InsertionSet(MetadataRecordSet):
             matrix = matrix.reindex(index=index_order)
 
         if sort:
-            matrix = sort_matrix(matrix, index_order=index_order)
+            matrix = _sort_matrix(matrix, index_order=index_order)
 
         return matrix
 
@@ -262,6 +283,9 @@ class InsertionSet(MetadataRecordSet):
                     sort=True,
                     heatmap_kws=None):
         """Plots a index-by-sample value matrix of insertions as a heatmap."""
+
+        import matplotlib.pyplot as plt
+        import seaborn as sns
 
         matrix = self.as_matrix(
             index=index, value=value, index_order=index_order, sort=sort)
@@ -294,6 +318,8 @@ class InsertionSet(MetadataRecordSet):
                             **kwargs):
         """Plots a grouped index-by-sample value matrix of insertions."""
 
+        import matplotlib.pyplot as plt
+
         # Group samples.
         if group_order is None:
             group_order = list(self._values[group].unique())
@@ -317,7 +343,7 @@ class InsertionSet(MetadataRecordSet):
         fig, axes = plt.subplots(
             ncols=len(grouped), figsize=figsize, gridspec_kw=gridspec_kws)
 
-        for (grp_key, ax), last in lookahead(zip(group_order, axes)):
+        for (grp_key, ax), last in _lookahead(zip(group_order, axes)):
             group_values = grouped[grp_key]
 
             grp_heatmap_kws = dict(heatmap_kws)
@@ -416,6 +442,9 @@ class InsertionSet(MetadataRecordSet):
            depths of insertions in (matching) genes.
         """
 
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+
         if ax is None:
             _, ax = plt.subplots()
 
@@ -432,6 +461,8 @@ class InsertionSet(MetadataRecordSet):
 
     def plot_sample_overlap(self, samples, labels=None, ax=None, **kwargs):
         """Plots overlap between two or three samples (in terms of genes)."""
+
+        import matplotlib.pyplot as plt
 
         if ax is None:
             _, ax = plt.subplots()
@@ -456,6 +487,9 @@ class InsertionSet(MetadataRecordSet):
                           ax=None,
                           **kwargs):
         """Plots boxplot of support for genes across samples."""
+
+        import matplotlib.pyplot as plt
+        import seaborn as sns
 
         if max_per_sample:
             # Take only the strongest insertion per sample (for each gene).
@@ -526,7 +560,7 @@ class InsertionSet(MetadataRecordSet):
         bed_data.to_csv(file_path, sep='\t', index=False, header=False)
 
 
-def sort_matrix(matrix, index_order=None):
+def _sort_matrix(matrix, index_order=None):
     """Sorts a 2D matrix, first by its rows and then by its columns.
 
     Parameters
@@ -554,7 +588,7 @@ def sort_matrix(matrix, index_order=None):
     return matrix_sorted
 
 
-def corrcoef(matrix):
+def _corrcoef(matrix):
     """Calculates the correlation coef for a DataFrame using np.corrcoef."""
 
     corr = np.corrcoef(matrix)
@@ -565,7 +599,7 @@ def corrcoef(matrix):
     return corr
 
 
-def lookahead(iterable):
+def _lookahead(iterable):
     """Pass through all values from the given iterable, augmented by the
     information if there are more values to come after the current one
     (False), or if it is the last value (True).
@@ -582,3 +616,58 @@ def lookahead(iterable):
 
     # Report the last value.
     yield last, True
+
+
+CisSite = namedtuple('Insertion',
+                     ['id', 'chromosome', 'position', 'strand', 'metadata'])
+
+
+class CisSet(MetadataRecordSet):
+    """Class that represents an CIS dataset."""
+
+    @classmethod
+    def _tuple_class(cls):
+        return CisSite
+
+    def assign_strand(self, insertions, min_homogeneity=0.5):
+        """Assigns CIS sites the average strand of their insertions."""
+
+        def _mean_strand(grp):
+            return int(np.sign(grp['strand'].mean()))
+
+        def _strand_homogeneity(grp, strand=None):
+            if strand is None:
+                strand = _mean_strand(grp)
+            return (grp['strand'] == strand).astype(int).mean()
+
+        def _strand_gen(insertions):
+            insertions = insertions.dropna(subset=['cis_id'])
+
+            for cis_id, grp in insertions.groupby('cis_id'):
+                strand = _mean_strand(grp)
+                homogeneity = _strand_homogeneity(grp, strand=strand)
+                yield cis_id, strand, homogeneity
+
+        if 'cis_id' not in insertions.columns:
+            raise ValueError('Insertions should be annotated with CIS IDs.')
+
+        # Determine CIS strands.
+        cis_strands = pd.DataFrame.from_records(
+            _strand_gen(insertions),
+            columns=['id', 'strand', 'strand_homogeneity'])
+
+        # Merge into CIS annotations.
+        merged = pd.merge(
+            self._values.drop(
+                ['strand', 'strand_homogeneity'], axis=1, errors='ignore'),
+            cis_strands,
+            on='id',
+            how='left')
+
+        # If homogeneity is below the given threshold, then we don't
+        # assign a specific strand (signified by a nan).
+        mask = merged['strand_homogeneity'] <= min_homogeneity
+        merged.loc[mask, 'strand'] = np.nan
+        merged.loc[mask, 'strand_homogeneity'] = np.nan
+
+        return CisSet(merged)

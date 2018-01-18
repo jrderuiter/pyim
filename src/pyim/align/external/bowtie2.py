@@ -1,6 +1,9 @@
 """Module with functions for calling bowtie2."""
 
+from pathlib import Path
 import sys
+
+import toolz
 
 from . import util as shell
 
@@ -8,9 +11,9 @@ from . import util as shell
 def bowtie2(read_paths,
             index_path,
             output_path,
-            options=None,
-            read2_paths=None,
-            verbose=False):
+            extra_options=None,
+            verbose=False,
+            logger=None):
     """
     Aligns reads to a reference genome using Bowtie2.
 
@@ -23,32 +26,30 @@ def bowtie2(read_paths,
     options : dict
         Dict of extra options to pass to Bowtie2. Should conform to the
         format expected by flatten_arguments.
-    read2_paths : List[Path]
-        Path to input files containing the second end (for paired-end data).
     verbose : bool
         Whether to print output from bowtie2 to stderr.
 
     """
 
-    # Ensure we have a copy of options to work on.
-    options = dict(options) if options is not None else {}
+    assert isinstance(read_paths, tuple)
+    assert 0 < len(read_paths) <= 2
 
-    # Inject inputs + index into options.
-    if read2_paths is not None:
-        options['-1'] = ','.join(str(fp) for fp in read_paths)
-        options['-2'] = ','.join(str(fp) for fp in read2_paths)
+    # Assemble options.
+    input_options = {'-x': index_path}
+
+    if len(read_paths) == 2:
+        input_options['-1'] = read_paths[0]
+        input_options['-2'] = read_paths[1]
     else:
-        options['-U'] = ','.join(str(fp) for fp in read_paths)
+        input_options['-U'] = read_paths[0]
 
-    if any(ext in read_paths[0].suffixes for ext in {'.fa', '.fna'}):
-        options['-f'] = True
+    if any(ext in Path(read_paths[0]).suffixes for ext in {'.fa', '.fna'}):
+        input_options['-f'] = True
 
-    options['-x'] = str(index_path)
+    options = toolz.merge(extra_options or {}, input_options)
 
-    # Build bowtie2 arguments.
+    # Build arguments.
     bowtie_args = ['bowtie2'] + shell.flatten_arguments(options)
-
-    # Sort arguments for samtools.
     sort_args = ['samtools', 'sort', '-o', str(output_path), '-']
 
     # Run in piped fashion to avoid extra IO.

@@ -1,60 +1,89 @@
-import itertools
-
+import pandas as pd
 import numpy as np
 
-from pyim.vendor.frozendict import frozendict
+from pyim.model import InsertionSet
 
 
-def select_closest(insertion, genes):
-    """Filters potential hits for genes closest to the insertion."""
+def filter_matches(matches,
+                   closest=False,
+                   blacklist=None,
+                   blacklist_col='gene_id'):
+    """Filter matches for closest gene and/or blacklisted genes."""
 
-    if len(genes) == 0:
-        return genes
+    if closest:
+        grouped = matches.groupby(['id'])
+        mask = grouped['gene_distance'].transform(lambda x: x == x.min())
 
-    distances = np.array([_calc_distance(insertion, gene)
-                          for gene in genes.itertuples()])  # yapf: disable
-    abs_distances = np.abs(distances)
+        matches = matches.loc[mask]
 
-    return genes.loc[abs_distances == abs_distances.min()]
+    if blacklist is not None:
+        matches = matches.loc[~matches[blacklist_col].isin(set(blacklist))]
 
-
-def filter_blacklist(genes, blacklist, field='gene_id'):
-    """Filters potential hits against given blacklist."""
-    return genes.loc[~genes[field].isin(blacklist)]
-
-
-def annotate_insertion(insertion, hits):
-    """Annotates insertion with given gene hits."""
-
-    if len(hits) > 0:
-        # Annotate insertion with overlapping genes.
-        for row in hits.itertuples():
-            gene_metadata = {
-                'gene_id': row.gene_id,
-                'gene_name': row.gene_name,
-                'gene_distance': _calc_distance(insertion, row),
-                'gene_orientation': 'sense' if row.strand \
-                    == insertion.strand else 'antisense'
-            }
-
-            metadata = {**insertion.metadata,
-                        **gene_metadata}  # yapf: disable
-            yield insertion._replace(metadata=frozendict(metadata))
-    else:
-        # In case of no overlap, return original insertion.
-        yield insertion
+    return matches
 
 
-def _calc_distance(insertion, gene):
-    assert not isinstance(gene.strand, str)
+def annotate_matches(matches, insertions, genes):
+    """Annotate matches with gene distance/orientation."""
 
-    if gene.start <= insertion.position < gene.end:
-        return 0
-    elif insertion.position > gene.end:
-        dist = insertion.position - gene.end
-    else:
-        dist = insertion.position - gene.start
+    # TODO: Handle different chromosome case in distance?
+    #   (Even if this not expected in the input.)
 
-    dist *= gene.strand
+    # Add gene/insertion info to matches.
+    gene_col_mapping = {
+        'gene_id': 'gene_id',
+        'gene_name': 'gene_name',
+        'start': 'gene_start',
+        'end': 'gene_end',
+        'strand': 'gene_strand'
+    }
 
-    return dist
+    gene_info = (genes[list(gene_col_mapping.keys())]
+                 .rename(columns=gene_col_mapping))  # yapf: disable
+
+    gene_info['gene_strand'] = gene_info['gene_strand'].map({'+': 1, '-': -1})
+
+    ins_col_mapping = {
+        'id': 'id',
+        'position': 'ins_position',
+        'strand': 'ins_strand'
+    }
+
+    ins_info = (insertions.values[list(ins_col_mapping.keys())]
+                .rename(columns=ins_col_mapping))  # yapf: disable
+
+    merged = pd.merge(matches, gene_info, on='gene_id', how='left')
+    merged = pd.merge(merged, ins_info.drop_duplicates(), on='id', how='left')
+
+    # Calculate distances.
+    start_dist = (merged['gene_start'] - merged['ins_position']).abs()
+    end_dist = (merged['gene_end'] - merged['ins_position']).abs()
+
+    merged['gene_distance'] = np.minimum(start_dist, end_dist)
+
+    within_mask = ((merged['gene_start'] < merged['ins_position']) &
+                   (merged['ins_position'] < merged['gene_end']))
+    merged.loc[within_mask, 'gene_distance'] = 0
+
+    # Determine (relative) orientation.
+    same_orientation = merged['gene_strand'] == merged['ins_strand']
+    merged['gene_orientation'] = same_orientation.map({True: 1, False: -1})
+
+    return merged.reindex(columns=list(matches.columns) +
+                          ['gene_name', 'gene_distance', 'gene_orientation'])
+
+
+# def annotate_matched_insertions(insertions, genes):
+#     """Annotate matched insertions with gene distance/orientation."""
+
+#     annotated = annotate_matches(
+#         insertions.values[['id', 'gene_id']].drop_duplicates(),
+#         insertions=insertions,
+#         genes=genes)
+
+#     # Drop existing annotation columns.
+#     annot_cols = ['gene_name', 'gene_distance', 'gene_orientation']
+#     ins_values = insertions.values.drop(annot_cols, errors='ignore', axis=1)
+
+#     merged = pd.merge(ins_values, annotated, on=['id', 'gene_id'], how='left')
+
+#     return InsertionSet(merged)

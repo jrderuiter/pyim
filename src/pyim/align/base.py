@@ -2,9 +2,145 @@ from collections import defaultdict
 from itertools import groupby, chain
 
 import numpy as np
+import pysam
 
 from pyim.model import Insertion
 from pyim.vendor.frozendict import frozendict
+
+from .external.cutadapt import cutadapt
+from .external.bowtie2 import bowtie2
+
+
+def trim_transposon(input_paths,
+                    output_paths,
+                    sequences,
+                    threads=1,
+                    verbose=False,
+                    logger=None):
+    """Trims input sequences for transposon sequence(s)."""
+
+    # Check inputs.
+    _check_reads(input_paths, output_paths)
+    _check_adapters(sequences)
+
+    # Assemble options.
+    cutadapt_opts = dict(sequences)
+    cutadapt_opts['--discard-untrimmed'] = True
+
+    if len(input_paths) == 2:
+        cutadapt_opts['--pair-filter=both'] = True
+
+    return cutadapt(
+        input_paths=input_paths,
+        output_paths=output_paths,
+        options=cutadapt_opts,
+        threads=threads,
+        verbose=verbose,
+        logger=logger)
+
+
+def trim_contaminants(input_paths,
+                      output_paths,
+                      sequences,
+                      min_length=None,
+                      threads=1,
+                      verbose=False,
+                      logger=None):
+    """Trims contaminants from input sequences."""
+
+    # Check inputs.
+    _check_reads(input_paths, output_paths)
+    _check_adapters(sequences)
+
+    # Assemble options.
+    cutadapt_opts = dict(sequences)
+
+    if min_length is not None:
+        cutadapt_opts['--minimum-length'] = min_length
+
+    return cutadapt(
+        input_paths=input_paths,
+        output_paths=output_paths,
+        options=cutadapt_opts,
+        threads=threads,
+        verbose=verbose,
+        logger=logger)
+
+
+def _check_reads(input_paths, output_paths=None):
+    if not isinstance(input_paths, tuple):
+        raise ValueError(
+            'Input reads should be provided as a tuple of 1 (for single-end) '
+            'or 2 (paired-end) file paths')
+
+    if output_paths is not None:
+        if not isinstance(output_paths, tuple):
+            raise ValueError(
+                'Output reads should be provided as a tuple of 1 (for '
+                'single-end) or 2 (paired-end) file paths')
+
+        if len(input_paths) != len(output_paths):
+            raise ValueError('Number of input paths and output paths '
+                             'should be the same')
+
+
+def _check_adapters(adapters):
+    """Checks adapters for valid keys."""
+
+    if len(adapters) == 0:
+        raise ValueError('No adapters given')
+
+    valid_types = {'-a', '-b', '-g', '-A', '-B', '-G'}
+    invalid_types = set(adapters.keys()) - valid_types
+
+    if invalid_types:
+        raise ValueError('Invalid adapter types: {}'.format(invalid_types))
+
+
+def align_reads(read_paths,
+                index_path,
+                output_path,
+                threads=1,
+                verbose=False,
+                logger=None):
+    """Aligns reads to reference genome."""
+
+    _check_reads(read_paths)
+
+    bowtie2(
+        read_paths=read_paths,
+        index_path=index_path,
+        output_path=output_path,
+        extra_options={'--threads': threads},
+        verbose=verbose,
+        logger=logger)
+
+
+def extract_insertions(alignment_path,
+                       position_func,
+                       sample_func,
+                       min_mapq=30,
+                       paired=False,
+                       merge_dist=None,
+                       min_support=0):
+    """Extract insertions from alignments."""
+
+    bam_file = pysam.AlignmentFile(str(alignment_path))
+
+    try:
+        summary = AlignmentSummary.from_alignments(
+            iter(bam_file),
+            position_func=position_func,
+            sample_func=sample_func,
+            min_mapq=min_mapq,
+            paired=paired)
+    finally:
+        bam_file.close()
+
+    if merge_dist is not None:
+        summary = summary.merge_within_distance(merge_dist)
+
+    yield from summary.to_insertions(min_support=min_support)
 
 
 class AlignmentSummary(object):
@@ -43,7 +179,7 @@ class AlignmentSummary(object):
         # Track alignment positions per sample. Each entry tracks positions
         # for a specific sample. Note that this dict contains two layers:
         #
-        #   {'sample': {(ref, pos, strand): [linker_pos]}}
+        #  {'sample': {(ref, pos, strand): [linker_pos]}}
         #
         # The outer dict tracks positions for the given sample. The inner dict
         # (sample dict) actually tracks transposon positions as
@@ -58,7 +194,7 @@ class AlignmentSummary(object):
 
     @staticmethod
     def _iter_paired(alignments, position_func, sample_func):
-        for mate1, mate2 in iter_mates(alignments):
+        for mate1, mate2 in _iter_mates(alignments):
             transposon_pos, linker_pos = position_func(mate1, mate2)
             sample = sample_func(mate1, mate2)
             yield transposon_pos, linker_pos, sample
@@ -137,8 +273,10 @@ class AlignmentSummary(object):
     def to_insertions(self, id_fmt='{sample}.INS_{num}', min_support=0):
         """Converts alignment map to a list of insertions."""
 
+        i = 1
+
         for sample, sample_values in self._values.items():
-            for i, (key, ends) in enumerate(sample_values.items()):
+            for key, ends in sample_values.items():
                 ref, pos, strand = key
                 support = len(set(ends))
 
@@ -155,8 +293,10 @@ class AlignmentSummary(object):
                         support=metadata['depth_unique'],
                         metadata=metadata)
 
+                    i += 1
 
-def iter_mates(alignments):
+
+def _iter_mates(alignments):
     """Iterates over mate pairs in alignments."""
 
     cache = {}

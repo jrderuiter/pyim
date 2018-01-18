@@ -10,16 +10,23 @@ with open('HISTORY.rst') as history_file:
     HISTORY = history_file.read()
 
 REQUIREMENTS = [
-    'pyfaidx>=0.4.8.1', 'intervaltree>=2.1', 'tqdm>=4.7', 'toolz>=0.8',
-    'rpy2>=2.8.2', 'numpy', 'pandas>=0.18', 'pysam>=0.9', 'natsort',
-    'cutadapt >=1.8', 'matplotlib', 'seaborn'
+    'pyfaidx>=0.4.8.1',
+    'intervaltree>=2.1',
+    'tqdm>=4.7',
+    'toolz>=0.8',
+    'rpy2>=2.8.2',
+    'numpy',
+    'pandas>=0.18',
+    'pysam>=0.9',
+    'natsort',
+    'cutadapt >=1.15',  # 'matplotlib', 'seaborn'
 ]
 
 EXTRAS_REQUIRE = {
     'dev': [
         'pytest', 'pytest-cov', 'pytest-mock', 'pytest-helpers-namespace',
         'python-coveralls', 'sphinx', 'sphinx-autobuild', 'sphinx_rtd_theme',
-        'bumpversion'
+        'bumpversion', 'mock'
     ]
 }
 
@@ -50,12 +57,11 @@ setup(
     extras_require=EXTRAS_REQUIRE,
     entry_points={
         'console_scripts': [
-            'pyim-align = pyim.main.pyim_align:main',
-            'pyim-demultiplex = pyim.main.pyim_demultiplex:main',
-            'pyim-merge = pyim.main.pyim_merge:main',
-            'pyim-cis = pyim.main.pyim_cis:main',
-            'pyim-annotate = pyim.main.pyim_annotate:main',
-            'pyim-bed = pyim.main.pyim_bed:main',
-            'pyim-split = pyim.main.pyim_split:main'
+            'pyim-align = pyim.cli.align:main',
+            'pyim-merge = pyim.cli.merge:main',
+            'pyim-cis = pyim.cli.cis:main',
+            'pyim-annotate = pyim.cli.annotate:main',
+            'pyim-bed = pyim.cli.bed:main',
+            'pyim-split = pyim.cli.split:main'
         ]
-    })
+    })  # yapf: disable

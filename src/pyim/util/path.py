@@ -36,13 +36,14 @@ def shorten_path(file_name, limit=40):
         return name
 
 
-def extract_suffix(file_path):
-    """Extracts suffix from file path."""
+def extract_extension(file_path):
+    """Extracts extension from file path."""
 
     file_path = Path(file_path)
 
     if file_path.suffixes[-1] == '.gz':
-        suffix = ''.join(file_path.suffixes[-2:])
+        ext = ''.join(file_path.suffixes[-2:])
     else:
-        suffix = file_path.suffixes[-1]
-    return suffix
+        ext = file_path.suffixes[-1]
+
+    return ext
